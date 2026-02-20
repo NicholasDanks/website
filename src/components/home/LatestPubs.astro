@@ -1,0 +1,95 @@
+---
+import SectionHeading from "../shared/SectionHeading.astro";
+import Card from "../shared/Card.astro";
+import Badge from "../shared/Badge.astro";
+import Button from "../shared/Button.astro";
+
+interface Publication {
+  id: string;
+  data: {
+    title: string;
+    authors: string[];
+    journal: string;
+    year: number;
+    type: string;
+    doi?: string;
+    citations?: number;
+    featured?: boolean;
+  };
+}
+
+interface Props {
+  publications: Publication[];
+}
+
+const { publications } = Astro.props;
+
+const typeColors: Record<string, "primary" | "accent" | "neutral"> = {
+  article: "primary",
+  book: "accent",
+  chapter: "neutral",
+  conference: "neutral",
+};
+
+function highlightAuthor(authors: string[]): string {
+  return authors
+    .map((a) =>
+      a.includes("Danks") ? `<strong class="text-accent-600 dark:text-accent-400">${a}</strong>` : a
+    )
+    .join(", ");
+}
+---
+
+<section class="py-16 sm:py-20">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <SectionHeading
+      title="Recent Publications"
+      subtitle="Selected recent work in PLS-SEM methodology, predictive modeling, and model selection."
+    />
+
+    <div class="grid gap-4">
+      {publications.map((pub) => (
+        <Card>
+          <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-2">
+                <Badge label={pub.data.type} variant={typeColors[pub.data.type] || "neutral"} />
+                <span class="text-sm text-surface-500 dark:text-surface-400">{pub.data.year}</span>
+              </div>
+              <h3 class="font-semibold text-surface-900 dark:text-surface-100 mb-1 leading-snug">
+                {pub.data.doi ? (
+                  <a href={`https://doi.org/${pub.data.doi}`} target="_blank" rel="noopener noreferrer" class="hover:text-accent-600 dark:hover:text-accent-400 transition-colors">
+                    {pub.data.title}
+                  </a>
+                ) : (
+                  pub.data.title
+                )}
+              </h3>
+              <p class="text-sm text-surface-600 dark:text-surface-400" set:html={highlightAuthor(pub.data.authors)} />
+              <p class="text-sm text-surface-500 dark:text-surface-400 mt-1 italic">
+                {pub.data.journal}
+              </p>
+            </div>
+            {pub.data.citations > 0 && (
+              <div class="shrink-0 text-right">
+                <div class="text-2xl font-bold text-accent-600 dark:text-accent-400">
+                  {pub.data.citations.toLocaleString()}
+                </div>
+                <div class="text-xs text-surface-500 dark:text-surface-400">citations</div>
+              </div>
+            )}
+          </div>
+        </Card>
+      ))}
+    </div>
+
+    <div class="mt-8 text-center">
+      <Button href="/research" variant="secondary">
+        View All Publications
+        <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+        </svg>
+      </Button>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,41 @@
+---
+import PageLayout from "../layouts/PageLayout.astro";
+import Hero from "../components/home/Hero.astro";
+import ResearchHighlights from "../components/home/ResearchHighlights.astro";
+import FeaturedSoftware from "../components/home/FeaturedSoftware.astro";
+import LatestPubs from "../components/home/LatestPubs.astro";
+import { getCollection } from "astro:content";
+
+const allPubs = await getCollection("publications");
+const featured = allPubs
+  .filter((p) => p.data.featured)
+  .sort((a, b) => b.data.year - a.data.year)
+  .slice(0, 5);
+
+const site = {
+  name: "Nicholas P. Danks",
+  title: "Associate Professor of Business Analytics",
+  institution: "Trinity Business School, Trinity College Dublin",
+  bio: "I am an Associate Professor of Business Analytics at Trinity Business School, Trinity College Dublin. My research focuses on the methodology of partial least squares structural equation modeling (PLS-SEM), predictive modeling, and model selection techniques. I am the co-creator and maintainer of the SEMinR R package, which provides a domain-specific language for building and estimating structural equation models in R. I hold a PhD from National Tsing Hua University, Taiwan, and also serve as Program Director for the MSc in Business Analytics.",
+  researchInterests: [
+    "PLS-SEM Methodology",
+    "Predictive Modeling",
+    "Model Selection",
+    "Information Systems",
+    "Statistical Software Development",
+  ],
+};
+---
+
+<PageLayout title={`${site.name} — ${site.title}`}>
+  <Hero
+    name={site.name}
+    title={site.title}
+    institution={site.institution}
+    bio={site.bio}
+    researchInterests={site.researchInterests}
+  />
+  <ResearchHighlights />
+  <FeaturedSoftware />
+  <LatestPubs publications={featured} />
+</PageLayout>

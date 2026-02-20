@@ -1,0 +1,73 @@
+---
+const currentYear = new Date().getFullYear();
+
+const academicLinks = [
+  {
+    label: "Google Scholar",
+    href: "https://scholar.google.com/citations?user=D7nnR8gAAAAJ&hl=en",
+    icon: "scholar",
+  },
+  {
+    label: "GitHub",
+    href: "https://github.com/NicholasDanks",
+    icon: "github",
+  },
+  {
+    label: "ORCID",
+    href: "https://orcid.org/0000-0002-7521-929X",
+    icon: "orcid",
+  },
+];
+---
+
+<footer class="border-t border-surface-200 dark:border-surface-800 mt-20">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+      <div class="text-center md:text-left">
+        <p class="font-bold text-surface-900 dark:text-surface-100">
+          Nicholas P<span class="text-accent-500">.</span> Danks
+        </p>
+        <p class="text-sm text-surface-500 dark:text-surface-400 mt-1">
+          Associate Professor of Business Analytics
+        </p>
+        <p class="text-sm text-surface-500 dark:text-surface-400">
+          Trinity Business School, Trinity College Dublin
+        </p>
+      </div>
+
+      <div class="flex items-center gap-4">
+        {academicLinks.map((link) => (
+          <a
+            href={link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="p-2 rounded-md text-surface-500 dark:text-surface-400 hover:text-accent-600 dark:hover:text-accent-400 hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
+            aria-label={link.label}
+          >
+            {link.icon === "scholar" && (
+              <svg class="w-5 h-5" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M5.242 13.769L0 9.5 12 0l12 9.5-5.242 4.269C17.548 11.249 14.978 9.5 12 9.5c-2.977 0-5.548 1.748-6.758 4.269zM12 10a7 7 0 1 0 0 14 7 7 0 0 0 0-14z" />
+              </svg>
+            )}
+            {link.icon === "github" && (
+              <svg class="w-5 h-5" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+              </svg>
+            )}
+            {link.icon === "orcid" && (
+              <svg class="w-5 h-5" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zM7.369 4.378c.525 0 .947.431.947.947s-.422.947-.947.947a.95.95 0 0 1-.947-.947c0-.525.422-.947.947-.947zm-.722 3.038h1.444v10.041H6.647V7.416zm3.562 0h3.9c3.712 0 5.344 2.653 5.344 5.025 0 2.578-2.016 5.025-5.325 5.025h-3.919V7.416zm1.444 1.303v7.444h2.297c3.272 0 4.022-2.484 4.022-3.722 0-1.847-1.209-3.722-3.853-3.722h-2.466z" />
+              </svg>
+            )}
+          </a>
+        ))}
+      </div>
+    </div>
+
+    <div class="mt-8 pt-6 border-t border-surface-200 dark:border-surface-800 text-center">
+      <p class="text-xs text-surface-400 dark:text-surface-500">
+        &copy; {currentYear} Nicholas P. Danks. Built with Astro.
+      </p>
+    </div>
+  </div>
+</footer>

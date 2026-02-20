@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+/* ── Font Faces ───────────────────────────────────────────── */
+
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("/fonts/instrument-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: italic;
+  font-weight: 400 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("/fonts/instrument-sans-latin-italic.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ── Theme Tokens ─────────────────────────────────────────── */
+
+@theme {
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+
+  /* Primary — corporate slate grey */
+  --color-primary-50: #f8fafc;
+  --color-primary-100: #f1f5f9;
+  --color-primary-200: #e2e8f0;
+  --color-primary-300: #cbd5e1;
+  --color-primary-400: #94a3b8;
+  --color-primary-500: #64748b;
+  --color-primary-600: #475569;
+  --color-primary-700: #334155;
+  --color-primary-800: #1e293b;
+  --color-primary-900: #0f172a;
+
+  /* Accent — vibrant corporate orange */
+  --color-accent-50: #fff7ed;
+  --color-accent-100: #ffedd5;
+  --color-accent-200: #fed7aa;
+  --color-accent-300: #fdba74;
+  --color-accent-400: #fb923c;
+  --color-accent-500: #f97316;
+  --color-accent-600: #ea580c;
+  --color-accent-700: #c2410c;
+  --color-accent-800: #9a3412;
+  --color-accent-900: #7c2d12;
+
+  /* Surface — clean neutral greys */
+  --color-surface-50: #fafafa;
+  --color-surface-100: #f4f4f5;
+  --color-surface-200: #e4e4e7;
+  --color-surface-300: #d4d4d8;
+  --color-surface-400: #a1a1aa;
+  --color-surface-500: #71717a;
+  --color-surface-600: #52525b;
+  --color-surface-700: #3f3f46;
+  --color-surface-800: #27272a;
+  --color-surface-900: #18181b;
+  --color-surface-950: #09090b;
+}
+
+/* ── Base Styles ──────────────────────────────────────────── */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-surface-50 text-surface-900 font-sans antialiased;
+  font-feature-settings: "kern" 1, "liga" 1;
+}
+
+/* Dark mode */
+.dark body {
+  @apply bg-surface-950 text-surface-100;
+}
+
+/* ── Selection ────────────────────────────────────────────── */
+
+::selection {
+  @apply bg-accent-500/20 text-accent-700;
+}
+
+.dark ::selection {
+  @apply bg-accent-400/30 text-accent-200;
+}
+
+/* ── Prose-like defaults ──────────────────────────────────── */
+
+h1,
+h2,
+h3,
+h4 {
+  @apply font-sans font-bold tracking-tight;
+}
+
+code,
+pre {
+  @apply font-mono;
+}
+
+/* ── Accent underline for section headings ────────────────── */
+
+.section-heading::after {
+  content: "";
+  @apply block w-12 h-1 mt-3 rounded-full bg-accent-500;
+}
+
+/* ── Frosted glass ────────────────────────────────────────── */
+
+.glass {
+  @apply bg-white/80 backdrop-blur-md border-b border-surface-200/50;
+}
+
+.dark .glass {
+  @apply bg-surface-950/80 border-surface-800/50;
+}
+
+/* ── Link styles ──────────────────────────────────────────── */
+
+.prose-link {
+  @apply text-accent-600 underline decoration-accent-300 underline-offset-2
+    hover:decoration-accent-500 transition-colors;
+}
+
+.dark .prose-link {
+  @apply text-accent-400 decoration-accent-700 hover:decoration-accent-400;
+}
+
+/* ── Transitions ──────────────────────────────────────────── */
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Code blocks ──────────────────────────────────────────── */
+
+pre {
+  @apply rounded-lg p-4 overflow-x-auto text-sm leading-relaxed;
+}
+
+.dark pre {
+  @apply bg-surface-900;
+}

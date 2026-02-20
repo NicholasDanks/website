@@ -1,0 +1,176 @@
+---
+import PageLayout from "../layouts/PageLayout.astro";
+import SectionHeading from "../components/shared/SectionHeading.astro";
+import Card from "../components/shared/Card.astro";
+import Button from "../components/shared/Button.astro";
+
+const academicProfiles = [
+  {
+    label: "Google Scholar",
+    href: "https://scholar.google.com/citations?user=D7nnR8gAAAAJ&hl=en",
+    description: "Full publication list and citation metrics",
+    icon: `<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M5.242 13.769L0 9.5 12 0l12 9.5-5.242 4.269C17.548 11.249 14.978 9.5 12 9.5c-2.977 0-5.548 1.748-6.758 4.269zM12 10a7 7 0 1 0 0 14 7 7 0 0 0 0-14z" /></svg>`,
+  },
+  {
+    label: "GitHub",
+    href: "https://github.com/NicholasDanks",
+    description: "Open-source projects and R packages",
+    icon: `<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" /></svg>`,
+  },
+  {
+    label: "ORCID",
+    href: "https://orcid.org/0000-0002-7521-929X",
+    description: "Researcher identity and publication record",
+    icon: `<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zM7.369 4.378c.525 0 .947.431.947.947s-.422.947-.947.947a.95.95 0 0 1-.947-.947c0-.525.422-.947.947-.947zm-.722 3.038h1.444v10.041H6.647V7.416zm3.562 0h3.9c3.712 0 5.344 2.653 5.344 5.025 0 2.578-2.016 5.025-5.325 5.025h-3.919V7.416zm1.444 1.303v7.444h2.297c3.272 0 4.022-2.484 4.022-3.722 0-1.847-1.209-3.722-3.853-3.722h-2.466z" /></svg>`,
+  },
+];
+---
+
+<PageLayout
+  title="Contact — Nicholas P. Danks"
+  description="Get in touch with Nicholas P. Danks at Trinity Business School."
+>
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+    <SectionHeading
+      title="Contact"
+      subtitle="Get in touch for research collaborations, speaking invitations, or general inquiries."
+    />
+
+    <div class="grid lg:grid-cols-2 gap-12">
+      <!-- Contact Info -->
+      <div class="space-y-8">
+        <!-- Office Info -->
+        <Card>
+          <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-4">
+            Office Information
+          </h3>
+          <div class="space-y-4">
+            <div class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-accent-500 mt-0.5 shrink-0" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <div>
+                <p class="text-sm font-medium text-surface-900 dark:text-surface-100">Email</p>
+                <a href="mailto:Nicholas.danks@tcd.ie" class="text-sm text-accent-600 dark:text-accent-400 hover:underline">
+                  Nicholas.danks@tcd.ie
+                </a>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-accent-500 mt-0.5 shrink-0" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <div>
+                <p class="text-sm font-medium text-surface-900 dark:text-surface-100">Address</p>
+                <p class="text-sm text-surface-600 dark:text-surface-400">
+                  Trinity Business School<br />
+                  Trinity College Dublin<br />
+                  Dublin 2, Ireland
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <!-- Academic Profiles -->
+        <div>
+          <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-4">
+            Academic Profiles
+          </h3>
+          <div class="space-y-3">
+            {academicProfiles.map((profile) => (
+              <a
+                href={profile.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center gap-4 p-4 rounded-xl border border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900 hover:border-accent-300 dark:hover:border-accent-700 hover:shadow-md transition-all duration-300"
+              >
+                <div class="text-primary-600 dark:text-primary-400 shrink-0" set:html={profile.icon} />
+                <div class="flex-1 min-w-0">
+                  <p class="font-medium text-surface-900 dark:text-surface-100">{profile.label}</p>
+                  <p class="text-sm text-surface-500 dark:text-surface-400">{profile.description}</p>
+                </div>
+                <svg class="w-4 h-4 text-surface-400 shrink-0" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <!-- Contact Form -->
+      <div>
+        <Card>
+          <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-6">
+            Send a Message
+          </h3>
+          <form name="contact" method="POST" data-netlify="true" class="space-y-5">
+            <input type="hidden" name="form-name" value="contact" />
+
+            <div>
+              <label for="name" class="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1">
+                Name
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                required
+                class="w-full rounded-lg border border-surface-300 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 text-surface-900 dark:text-surface-100 px-4 py-2.5 text-sm focus:ring-2 focus:ring-accent-500 focus:border-accent-500 focus:outline-none dark:focus:ring-accent-400 dark:focus:border-accent-400 focus:ring-offset-2 dark:focus:ring-offset-surface-900"
+              />
+            </div>
+
+            <div>
+              <label for="email" class="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                required
+                class="w-full rounded-lg border border-surface-300 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 text-surface-900 dark:text-surface-100 px-4 py-2.5 text-sm focus:ring-2 focus:ring-accent-500 focus:border-accent-500 focus:outline-none dark:focus:ring-accent-400 dark:focus:border-accent-400 focus:ring-offset-2 dark:focus:ring-offset-surface-900"
+              />
+            </div>
+
+            <div>
+              <label for="subject" class="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1">
+                Subject
+              </label>
+              <input
+                type="text"
+                id="subject"
+                name="subject"
+                required
+                class="w-full rounded-lg border border-surface-300 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 text-surface-900 dark:text-surface-100 px-4 py-2.5 text-sm focus:ring-2 focus:ring-accent-500 focus:border-accent-500 focus:outline-none dark:focus:ring-accent-400 dark:focus:border-accent-400 focus:ring-offset-2 dark:focus:ring-offset-surface-900"
+              />
+            </div>
+
+            <div>
+              <label for="message" class="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1">
+                Message
+              </label>
+              <textarea
+                id="message"
+                name="message"
+                rows="5"
+                required
+                class="w-full rounded-lg border border-surface-300 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 text-surface-900 dark:text-surface-100 px-4 py-2.5 text-sm focus:ring-2 focus:ring-accent-500 focus:border-accent-500 focus:outline-none dark:focus:ring-accent-400 dark:focus:border-accent-400 focus:ring-offset-2 dark:focus:ring-offset-surface-900 resize-y"
+              ></textarea>
+            </div>
+
+            <Button variant="primary">
+              <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+              Send Message
+            </Button>
+          </form>
+        </Card>
+      </div>
+    </div>
+  </div>
+</PageLayout>

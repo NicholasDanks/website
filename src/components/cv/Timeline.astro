@@ -1,0 +1,58 @@
+---
+interface TimelineEntry {
+  year: string;
+  title: string;
+  organization: string;
+  type: string;
+}
+
+interface Props {
+  entries: TimelineEntry[];
+}
+
+const { entries } = Astro.props;
+
+const typeIcons: Record<string, string> = {
+  position: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>`,
+  education: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 7l-9-5 9-5 9 5-9 5z" /></svg>`,
+  achievement: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>`,
+};
+
+const typeColors: Record<string, string> = {
+  position: "bg-primary-100 text-primary-600 dark:bg-primary-900/40 dark:text-primary-400 ring-primary-200 dark:ring-primary-800",
+  education: "bg-accent-100 text-accent-600 dark:bg-accent-900/40 dark:text-accent-400 ring-accent-200 dark:ring-accent-800",
+  achievement: "bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-400 ring-surface-200 dark:ring-surface-700",
+};
+---
+
+<div class="relative">
+  <!-- Vertical line -->
+  <div class="absolute left-5 top-0 bottom-0 w-px bg-surface-200 dark:bg-surface-700"></div>
+
+  <div class="space-y-8">
+    {entries.map((entry) => (
+      <div class="relative pl-14">
+        <!-- Icon dot -->
+        <div
+          class:list={[
+            "absolute left-2 w-7 h-7 rounded-full flex items-center justify-center ring-2",
+            typeColors[entry.type] || typeColors.achievement,
+          ]}
+          set:html={typeIcons[entry.type] || typeIcons.achievement}
+        />
+
+        <div>
+          <span class="text-sm font-mono text-accent-500 font-medium">
+            {entry.year}
+          </span>
+          <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mt-0.5">
+            {entry.title}
+          </h3>
+          <p class="text-sm text-surface-600 dark:text-surface-400">
+            {entry.organization}
+          </p>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>

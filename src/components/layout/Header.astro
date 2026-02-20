@@ -1,0 +1,107 @@
+---
+import ThemeToggle from "./ThemeToggle.astro";
+
+const navLinks = [
+  { href: "/", label: "Home" },
+  { href: "/research", label: "Research" },
+  { href: "/teaching", label: "Teaching" },
+  { href: "/software", label: "Software" },
+  { href: "/cv", label: "CV" },
+  { href: "/contact", label: "Contact" },
+];
+
+const currentPath = Astro.url.pathname;
+---
+
+<header class="glass fixed top-0 inset-x-0 z-50">
+  <nav class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <a href="/" class="font-bold text-lg tracking-tight text-surface-900 dark:text-surface-50 hover:text-accent-600 dark:hover:text-accent-400 transition-colors">
+      N<span class="text-accent-500">.</span> Danks
+    </a>
+
+    <!-- Desktop nav -->
+    <div class="hidden md:flex items-center gap-1">
+      {navLinks.map((link) => (
+        <a
+          href={link.href}
+          class:list={[
+            "px-3 py-2 rounded-md text-sm font-medium transition-colors",
+            currentPath === link.href || (link.href !== "/" && currentPath.startsWith(link.href))
+              ? "text-accent-600 dark:text-accent-400 bg-accent-50 dark:bg-accent-900/30"
+              : "text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-800/50",
+          ]}
+        >
+          {link.label}
+        </a>
+      ))}
+      <div class="ml-2 pl-2 border-l border-surface-200 dark:border-surface-700">
+        <ThemeToggle />
+      </div>
+    </div>
+
+    <!-- Mobile menu button -->
+    <div class="flex md:hidden items-center gap-2">
+      <ThemeToggle />
+      <button
+        id="mobile-menu-btn"
+        class="p-2 rounded-md text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800"
+        aria-label="Toggle menu"
+        aria-expanded="false"
+      >
+        <div class="w-6 h-6 relative flex flex-col items-center justify-center">
+          <span class="hamburger-line absolute h-0.5 w-5 bg-current rounded transition-all duration-300" style="transform: translateY(-6px)"></span>
+          <span class="hamburger-line absolute h-0.5 w-5 bg-current rounded transition-all duration-300"></span>
+          <span class="hamburger-line absolute h-0.5 w-5 bg-current rounded transition-all duration-300" style="transform: translateY(6px)"></span>
+        </div>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile menu overlay -->
+  <div
+    id="mobile-menu"
+    class="md:hidden hidden fixed inset-0 top-16 bg-white/95 dark:bg-surface-950/95 backdrop-blur-md z-40"
+  >
+    <nav class="flex flex-col p-6 gap-2">
+      {navLinks.map((link) => (
+        <a
+          href={link.href}
+          class:list={[
+            "px-4 py-3 rounded-lg text-lg font-medium transition-colors",
+            currentPath === link.href || (link.href !== "/" && currentPath.startsWith(link.href))
+              ? "text-accent-600 dark:text-accent-400 bg-accent-50 dark:bg-accent-900/30"
+              : "text-surface-700 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800",
+          ]}
+        >
+          {link.label}
+        </a>
+      ))}
+    </nav>
+  </div>
+</header>
+
+<script>
+  const btn = document.getElementById("mobile-menu-btn");
+  const menu = document.getElementById("mobile-menu");
+  const lines = btn?.querySelectorAll(".hamburger-line");
+
+  btn?.addEventListener("click", () => {
+    const expanded = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", String(!expanded));
+    menu?.classList.toggle("hidden");
+
+    if (lines && lines.length === 3) {
+      if (!expanded) {
+        // Animate to X
+        (lines[0] as HTMLElement).style.transform = "rotate(45deg)";
+        (lines[1] as HTMLElement).style.opacity = "0";
+        (lines[2] as HTMLElement).style.transform = "rotate(-45deg)";
+      } else {
+        // Animate back to hamburger
+        (lines[0] as HTMLElement).style.transform = "translateY(-6px)";
+        (lines[1] as HTMLElement).style.opacity = "1";
+        (lines[2] as HTMLElement).style.transform = "translateY(6px)";
+      }
+    }
+  });
+</script>

@@ -1,0 +1,44 @@
+---
+import Card from "../shared/Card.astro";
+import Badge from "../shared/Badge.astro";
+
+interface Props {
+  title: string;
+  code: string;
+  level: string;
+  semester: string;
+  year: string;
+  status: string;
+  description: string;
+  topics: string[];
+}
+
+const { title, code, level, semester, year, status, description, topics } = Astro.props;
+---
+
+<Card>
+  <div class="flex items-start justify-between mb-3">
+    <div>
+      <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-100">
+        {title}
+      </h3>
+      <p class="text-sm font-mono text-surface-500 dark:text-surface-400">
+        {code} &middot; {level} &middot; {semester} {year}
+      </p>
+    </div>
+    <Badge
+      label={status === "current" ? "Current" : "Past"}
+      variant={status === "current" ? "accent" : "neutral"}
+    />
+  </div>
+
+  <p class="text-sm text-surface-600 dark:text-surface-400 leading-relaxed mb-4">
+    {description}
+  </p>
+
+  <div class="flex flex-wrap gap-1.5">
+    {topics.map((topic) => (
+      <Badge label={topic} variant="primary" />
+    ))}
+  </div>
+</Card>

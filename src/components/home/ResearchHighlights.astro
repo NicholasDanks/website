@@ -1,0 +1,48 @@
+---
+import SectionHeading from "../shared/SectionHeading.astro";
+import Card from "../shared/Card.astro";
+
+const highlights = [
+  {
+    icon: `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>`,
+    title: "PLS-SEM Methodology",
+    description:
+      "Advancing the methodology of partial least squares structural equation modeling, including estimation, prediction, and model selection techniques.",
+  },
+  {
+    icon: `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>`,
+    title: "Statistical Software",
+    description:
+      "Building open-source R packages (SEMinR, seminrExtras) that make advanced statistical methods accessible through intuitive domain-specific languages.",
+  },
+  {
+    icon: `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>`,
+    title: "Predictive Modeling",
+    description:
+      "Developing frameworks for out-of-sample prediction, model selection uncertainty, and multimodel inference in business and social science research.",
+  },
+];
+---
+
+<section class="py-16 sm:py-20">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <SectionHeading
+      title="Research Focus"
+      subtitle="My research sits at the intersection of statistical methodology and business analytics."
+    />
+
+    <div class="grid sm:grid-cols-3 gap-6">
+      {highlights.map((item) => (
+        <Card>
+          <div class="text-accent-600 dark:text-accent-400 mb-4" set:html={item.icon} />
+          <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
+            {item.title}
+          </h3>
+          <p class="text-sm text-surface-600 dark:text-surface-400 leading-relaxed">
+            {item.description}
+          </p>
+        </Card>
+      ))}
+    </div>
+  </div>
+</section>

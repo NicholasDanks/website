@@ -1,0 +1,89 @@
+---
+import PageLayout from "../layouts/PageLayout.astro";
+import SectionHeading from "../components/shared/SectionHeading.astro";
+import CourseCard from "../components/teaching/CourseCard.astro";
+import { getCollection } from "astro:content";
+
+const allCourses = await getCollection("courses");
+const current = allCourses.filter((c) => c.data.status === "current").sort((a, b) => a.data.code.localeCompare(b.data.code));
+const past = allCourses.filter((c) => c.data.status === "past").sort((a, b) => a.data.code.localeCompare(b.data.code));
+---
+
+<PageLayout
+  title="Teaching — Nicholas P. Danks"
+  description="Teaching activities and courses by Nicholas P. Danks at Trinity Business School."
+>
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+    <SectionHeading
+      title="Teaching"
+      subtitle="I teach data mining, business analytics, and strategic technology management at Trinity Business School, bridging the gap between statistical theory and practical application."
+    />
+
+    <!-- Teaching Philosophy -->
+    <div class="mb-16 max-w-3xl">
+      <div class="p-6 rounded-xl bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800">
+        <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-3">
+          Teaching Philosophy
+        </h3>
+        <div class="space-y-3 text-surface-700 dark:text-surface-300 leading-relaxed">
+          <p>
+            I believe in teaching analytics through a hands-on, problem-driven approach.
+            Students learn best when they can immediately apply statistical concepts to real
+            business problems using modern tools and programming languages.
+          </p>
+          <p>
+            My courses emphasize practical R programming skills, critical thinking about
+            data-driven decisions, and the ability to communicate analytical results to
+            non-technical stakeholders.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Current Courses -->
+    {current.length > 0 && (
+      <div class="mb-12">
+        <h3 class="text-xl font-semibold text-surface-900 dark:text-surface-100 mb-6">
+          Current Courses
+        </h3>
+        <div class="grid sm:grid-cols-2 gap-6">
+          {current.map((course) => (
+            <CourseCard
+              title={course.data.title}
+              code={course.data.code}
+              level={course.data.level}
+              semester={course.data.semester}
+              year={course.data.year}
+              status={course.data.status}
+              description={course.data.description}
+              topics={course.data.topics}
+            />
+          ))}
+        </div>
+      </div>
+    )}
+
+    <!-- Past Courses -->
+    {past.length > 0 && (
+      <div>
+        <h3 class="text-xl font-semibold text-surface-900 dark:text-surface-100 mb-6">
+          Past Courses
+        </h3>
+        <div class="grid sm:grid-cols-2 gap-6">
+          {past.map((course) => (
+            <CourseCard
+              title={course.data.title}
+              code={course.data.code}
+              level={course.data.level}
+              semester={course.data.semester}
+              year={course.data.year}
+              status={course.data.status}
+              description={course.data.description}
+              topics={course.data.topics}
+            />
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+</PageLayout>

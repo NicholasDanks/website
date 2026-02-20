@@ -1,0 +1,66 @@
+---
+import PageLayout from "../layouts/PageLayout.astro";
+import SectionHeading from "../components/shared/SectionHeading.astro";
+import Badge from "../components/shared/Badge.astro";
+import FilterBar from "../components/publications/FilterBar.astro";
+import PublicationCard from "../components/publications/PublicationCard.astro";
+import { getCollection } from "astro:content";
+
+const allPubs = await getCollection("publications");
+const sorted = allPubs.sort((a, b) => b.data.year - a.data.year || b.data.citations - a.data.citations);
+
+const types = [...new Set(sorted.map((p) => p.data.type))].sort();
+const years = [...new Set(sorted.map((p) => p.data.year))].sort((a, b) => b - a);
+
+const researchInterests = [
+  "PLS-SEM Methodology",
+  "Predictive Modeling",
+  "Model Selection",
+  "Linear Regression",
+  "Statistical Software Development",
+  "Business Analytics",
+];
+---
+
+<PageLayout
+  title="Research & Publications — Nicholas P. Danks"
+  description="Publications and research in PLS-SEM methodology, predictive modeling, and model selection by Nicholas P. Danks."
+>
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+    <SectionHeading
+      title="Research & Publications"
+      subtitle="My research focuses on advancing statistical methodology for business and social science research."
+    />
+
+    <!-- Research Interests -->
+    <div class="mb-12">
+      <h3 class="text-sm font-medium text-surface-500 dark:text-surface-400 uppercase tracking-wider mb-3">
+        Research Interests
+      </h3>
+      <div class="flex flex-wrap gap-2">
+        {researchInterests.map((interest) => (
+          <Badge label={interest} variant="primary" />
+        ))}
+      </div>
+    </div>
+
+    <!-- Filter & Publication List -->
+    <FilterBar types={types} years={years} />
+
+    <div class="grid gap-4" id="publication-list">
+      {sorted.map((pub) => (
+        <PublicationCard
+          title={pub.data.title}
+          authors={pub.data.authors}
+          journal={pub.data.journal}
+          year={pub.data.year}
+          type={pub.data.type}
+          doi={pub.data.doi}
+          url={pub.data.url}
+          citations={pub.data.citations}
+          featured={pub.data.featured}
+        />
+      ))}
+    </div>
+  </div>
+</PageLayout>

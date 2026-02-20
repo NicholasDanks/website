@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#0569b9"/>
+  <text x="5" y="24" font-family="system-ui, sans-serif" font-weight="700" font-size="22" fill="white">N</text>
+  <circle cx="25" cy="22" r="3" fill="#e85d26"/>
+</svg>
