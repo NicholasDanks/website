@@ -1,0 +1,473 @@
+---
+title: "seminrExtras 1.0.0 — Feature Tour"
+author: "Nicholas P. Danks"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    theme: flatly
+    code_folding: show
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo      = TRUE,
+  message   = FALSE,
+  warning   = FALSE,
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+# Introduction
+
+`seminrExtras` 1.0.0 is now on CRAN. It extends the `seminr` PLS-SEM workflow with eight new assessment methods:
+
+| Method    | Function(s)                                           | What it tells you                                     |
+|-----------|-------------------------------------------------------|-------------------------------------------------------|
+| COA       | `assess_coa()`                                        | Why / for whom your model fails to generalise         |
+| NCA       | `assess_nca()`                                        | Which predictors are **necessary** (not just sufficient) |
+| NCA-ESSE  | `assess_nca_esse()`                                   | How robust NCA conclusions are to extreme responses    |
+| cIPMA     | `assess_cipma()` / `assess_ipma()`                    | Managerial priority map, optionally with necessity    |
+| FIMIX-PLS | `assess_fimix()` / `assess_fimix_compare()`           | EM-based latent-class segmentation                    |
+| PLS-POS   | `assess_pos()` / `assess_pos_compare()` / `pos_segments()` | Prediction-oriented segmentation (max ΣR²)        |
+| CTA-PLS   | `assess_cta()`                                        | Is this measurement model actually reflective?        |
+| PCM       | `assess_pcm()`                                        | Does the mediator improve out-of-sample prediction?    |
+
+Plus hardened `assess_cvpat()`, `assess_cvpat_compare()`, and `congruence_test()`.
+
+```{r libs}
+# install.packages("seminrExtras")
+library(seminr)
+library(seminrExtras)
+packageVersion("seminrExtras")
+```
+
+Two bundled datasets are used throughout:
+
+- `mobi` — MOBI customer satisfaction (from `seminr`)
+- `corp_rep_data` — Corporate reputation (from `seminr`)
+
+---
+
+# 1. Base models
+
+## 1a. MOBI model (reflective, for NCA / cIPMA / CTA / PCM / congruence)
+
+```{r mobi-model}
+mobi_mm <- constructs(
+  composite("Image",        multi_items("IMAG", 1:5)),
+  composite("Expectation",  multi_items("CUEX", 1:3)),
+  composite("Value",        multi_items("PERV", 1:2)),
+  composite("Satisfaction", multi_items("CUSA", 1:3)),
+  composite("Loyalty",      multi_items("CUSL", 1:3))
+)
+
+mobi_sm <- relationships(
+  paths(from = "Image",        to = c("Expectation", "Satisfaction", "Loyalty")),
+  paths(from = "Expectation",  to = c("Value", "Satisfaction")),
+  paths(from = "Value",        to = "Satisfaction"),
+  paths(from = "Satisfaction", to = "Loyalty")
+)
+
+mobi_pls <- estimate_pls(
+  data              = mobi,
+  measurement_model = mobi_mm,
+  structural_model  = mobi_sm
+)
+```
+
+## 1b. Corporate reputation model (Mode B formative, for FIMIX / POS / CVPAT / COA)
+
+```{r corp-model}
+corp_rep_mm <- constructs(
+  composite("QUAL", multi_items("qual_", 1:8), weights = mode_B),
+  composite("PERF", multi_items("perf_", 1:5), weights = mode_B),
+  composite("CSOR", multi_items("csor_", 1:5), weights = mode_B),
+  composite("ATTR", multi_items("attr_", 1:3), weights = mode_B),
+  composite("COMP", multi_items("comp_", 1:3)),
+  composite("LIKE", multi_items("like_", 1:3)),
+  composite("CUSA", single_item("cusa")),
+  composite("CUSL", multi_items("cusl_", 1:3))
+)
+
+corp_rep_sm <- relationships(
+  paths(from = c("QUAL", "PERF", "CSOR", "ATTR"), to = c("COMP", "LIKE")),
+  paths(from = c("COMP", "LIKE"),                 to = c("CUSA", "CUSL")),
+  paths(from = "CUSA",                            to = "CUSL")
+)
+
+corp_pls <- estimate_pls(
+  data              = corp_rep_data,
+  measurement_model = corp_rep_mm,
+  structural_model  = corp_rep_sm,
+  missing           = mean_replacement,
+  missing_value     = "-99"
+)
+```
+
+## 1c. Simple COA model (reduced corporate reputation)
+
+```{r coa-model}
+corp_mm_simple <- constructs(
+  composite("COMP", multi_items("comp_", 1:3)),
+  composite("LIKE", multi_items("like_", 1:3)),
+  composite("CUSA", single_item("cusa")),
+  composite("CUSL", multi_items("cusl_", 1:3))
+)
+
+corp_sm_simple <- relationships(
+  paths(from = c("COMP", "LIKE"), to = "CUSA"),
+  paths(from = "CUSA",            to = "CUSL")
+)
+
+corp_model <- estimate_pls(
+  data              = corp_rep_data,
+  measurement_model = corp_mm_simple,
+  structural_model  = corp_sm_simple,
+  missing           = mean_replacement,
+  missing_value     = "-99"
+)
+```
+
+---
+
+# 2. Composite Overfit Analysis (COA)
+
+Diagnoses *why* and *for whom* the model fails to generalise. Returns predictive deviance, a decision tree that groups deviant cases, and unstable-path analysis.
+
+```{r coa}
+coa_result <- assess_coa(
+  corp_model,
+  focal_construct = "CUSL",
+  noFolds = 10, reps = 1, cores = 1,
+  seed = 123
+)
+
+print(coa_result)
+summary(coa_result)
+```
+
+### Plots
+
+```{r coa-plots}
+plot(coa_result, type = "pd")      # predictive deviance distribution
+plot(coa_result, type = "tree")    # decision tree
+plot(coa_result, type = "groups")  # deviant group highlights
+```
+
+### Step-by-step COA
+
+```{r coa-steps}
+pd     <- predictive_deviance(corp_model,
+                              focal_construct = "CUSL",
+                              noFolds = 10, reps = 1, cores = 1,
+                              seed = 123)
+tree   <- deviance_tree(pd, deviance_bounds = c(0.025, 0.975))
+instab <- unstable_params(corp_model, tree$deviant_groups, params = "path_coef")
+print(instab)
+
+# Inspect the rules and competing splits for one deviant group
+first_group <- names(tree$deviant_groups)[1]
+group_rules(first_group, coa_result)             # decision rule for group "A"
+competes(tree$group_roots[[first_group]], tree)  # competing splits at that node
+```
+
+---
+
+# 3. Necessary Condition Analysis (NCA)
+
+Tests **necessity**, not sufficiency. No external `NCA` package required — CE-FDH and CR-FDH ceiling lines are built in.
+
+```{r nca}
+nca_sat <- assess_nca(
+  mobi_pls,
+  target   = "Satisfaction",
+  test.rep = 1000,
+  seed     = 123
+)
+
+print(nca_sat)
+summary(nca_sat)
+
+plot(nca_sat, type = "effects")   # effect size bar plot
+plot(nca_sat, type = "scatter")   # ceiling-line scatter plots
+```
+
+---
+
+# 4. NCA-ESSE (Effect Size Sensitivity Extension)
+
+Varies the ECDF threshold, removes upper-left observations, and compares the empirical effect size drop against a uniform benchmark (Becker et al., 2026).
+
+```{r nca-esse}
+esse_sat <- assess_nca_esse(
+  mobi_pls,
+  target     = "Satisfaction",
+  thresholds = seq(0, 0.05, by = 0.005),
+  seed       = 123
+)
+
+print(esse_sat)
+summary(esse_sat)
+
+plot(esse_sat, type = "sensitivity")   # Fig. 4, Becker et al. (2026)
+plot(esse_sat, type = "difference")    # Fig. 6, Becker et al. (2026)
+```
+
+---
+
+# 5. cIPMA (Combined Importance–Performance Map Analysis)
+
+`assess_ipma()` is a convenience wrapper for IPMA alone; `assess_cipma()` overlays NCA necessity onto the IPMA map.
+
+## IPMA only
+
+```{r ipma}
+ipma_result <- assess_ipma(
+  mobi_pls,
+  target    = "Loyalty",
+  scale_min = 1,
+  scale_max = 10
+)
+
+print(ipma_result)
+summary(ipma_result)
+plot(ipma_result, type = "ipma")
+```
+
+## cIPMA (IPMA + necessity)
+
+```{r cipma}
+cipma_result <- assess_cipma(
+  mobi_pls,
+  target       = "Loyalty",
+  scale_min    = 1,
+  scale_max    = 10,
+  nca_test.rep = 1000,
+  seed         = 123
+)
+
+print(cipma_result)
+summary(cipma_result)
+plot(cipma_result, type = "cipma")                       # IPMA + NCA overlay
+plot(cipma_result, importance_metric = "standardized")   # standardized total effects
+```
+
+---
+
+# 6. FIMIX-PLS (EM-based latent class segmentation)
+
+Uncovers unobserved heterogeneity. Multi-start EM with information-criteria comparison across K.
+
+## Single K
+
+```{r fimix-single}
+fimix_k2 <- assess_fimix(corp_pls, K = 2, nstart = 10, seed = 123)
+
+print(fimix_k2)
+summary(fimix_k2)
+plot(fimix_k2)
+```
+
+## Compare across K
+
+```{r fimix-compare}
+fimix_compare <- assess_fimix_compare(
+  corp_pls,
+  K_range = 2:4,
+  nstart  = 10,
+  seed    = 123
+)
+
+print(fimix_compare)
+plot(fimix_compare)   # IC across K
+```
+
+---
+
+# 7. PLS-POS (Prediction-Oriented Segmentation)
+
+Maximises Σ R² across segments (Becker et al., 2013). No distributional assumptions, detects heterogeneity in both structural and formative measurement models.
+
+## Single K
+
+```{r pos-single}
+pos_k2 <- assess_pos(corp_pls, K = 2, nstart = 10, max_iter = 100, seed = 123)
+
+print(pos_k2)
+summary(pos_k2)
+
+plot(pos_k2, type = "segments")
+plot(pos_k2, type = "rsquared")
+plot(pos_k2, type = "paths")
+```
+
+## Extract per-segment models
+
+```{r pos-segments}
+seg_models <- pos_segments(pos_k2)
+summary(seg_models[[1]])
+```
+
+## Compare across K
+
+```{r pos-compare}
+pos_compare <- assess_pos_compare(
+  corp_pls,
+  K_range  = 2:4,
+  nstart   = 10,
+  max_iter = 100,
+  seed     = 123
+)
+
+print(pos_compare)
+plot(pos_compare)
+```
+
+---
+
+# 8. CTA-PLS (Confirmatory Tetrad Analysis)
+
+Tests whether a construct's measurement model is consistent with a reflective specification. With `borrow = TRUE` (default), constructs with 2–3 indicators borrow from structurally connected constructs so they can still be tested.
+
+```{r cta}
+cta_result <- assess_cta(mobi_pls, nboot = 5000, seed = 123)
+
+print(cta_result)
+summary(cta_result)
+plot(cta_result)
+```
+
+### Without borrowing (only constructs with ≥ 4 indicators)
+
+```{r cta-no-borrow}
+cta_no_borrow <- assess_cta(mobi_pls, nboot = 5000, borrow = FALSE, seed = 123)
+print(cta_no_borrow)
+```
+
+---
+
+# 9. PCM (Predictive Contribution of the Mediator)
+
+Does the mediator actually improve out-of-sample prediction? Compares Direct-Antecedent (DA) and Earliest-Antecedent (EA) predictions on the isolated mediation sub-model (Danks, 2021). Mediation paths are auto-detected.
+
+## Single-mediator model
+
+```{r pcm-single}
+# Use a minimal mediation model: Image -> Satisfaction -> Loyalty (+ direct)
+pcm_mm <- constructs(
+  composite("Image",        multi_items("IMAG", 1:5)),
+  composite("Satisfaction", multi_items("CUSA", 1:3)),
+  composite("Loyalty",      multi_items("CUSL", 1:3))
+)
+pcm_sm <- relationships(
+  paths(from = "Image",        to = "Satisfaction"),
+  paths(from = "Satisfaction", to = "Loyalty"),
+  paths(from = "Image",        to = "Loyalty")
+)
+pcm_pls <- estimate_pls(mobi, pcm_mm, pcm_sm)
+
+pcm_result <- assess_pcm(
+  pcm_pls,
+  target  = "Loyalty",
+  noFolds = 10,
+  reps    = 10
+)
+
+pcm_result
+summary(pcm_result)
+plot(pcm_result)
+```
+
+## Multi-mediator model (auto-detects all paths)
+
+```{r pcm-multi}
+pcm_full <- assess_pcm(
+  mobi_pls,
+  target  = "Loyalty",
+  noFolds = 10,
+  reps    = 10
+)
+
+pcm_full
+summary(pcm_full)
+plot(pcm_full)
+```
+
+---
+
+# 10. Hardened CVPAT and congruence testing
+
+## CVPAT (single model + model comparison)
+
+```{r cvpat}
+# Alternative structural model: drop CUSL from COMP/LIKE block
+alt_sm <- relationships(
+  paths(from = c("QUAL", "PERF", "CSOR", "ATTR"), to = c("COMP", "LIKE")),
+  paths(from = c("COMP", "LIKE"),                 to = "CUSA"),
+  paths(from = "CUSA",                            to = "CUSL")
+)
+
+corp_pls_alt <- estimate_pls(
+  data              = corp_rep_data,
+  measurement_model = corp_rep_mm,
+  structural_model  = alt_sm,
+  missing           = mean_replacement,
+  missing_value     = "-99"
+)
+
+# Assess the focal model
+cvpat_focal <- assess_cvpat(
+  corp_pls,
+  testtype  = "two.sided",
+  nboot     = 2000,
+  seed      = 123,
+  technique = predict_DA,
+  noFolds   = 10,
+  reps      = 10
+)
+print(cvpat_focal$CVPAT_compare_LM, digits = 3)
+print(cvpat_focal$CVPAT_compare_IA, digits = 3)
+
+# Compare focal vs. alternative
+cvpat_cmp <- assess_cvpat_compare(
+  established_model = corp_pls,
+  alternative_model = corp_pls_alt,
+  testtype  = "two.sided",
+  nboot     = 2000,
+  technique = predict_DA,
+  seed      = 123,
+  noFolds   = 10,
+  reps      = 10,
+  cores     = NULL
+)
+print(cvpat_cmp, digits = 3)
+```
+
+## Congruence test
+
+Tests whether the congruence coefficients between original PLS composite weights and bootstrapped weights are significantly close to 1.
+
+```{r congruence}
+cong_result <- congruence_test(
+  mobi_pls,
+  nboot     = 2000,
+  seed      = 123,
+  alpha     = 0.05,
+  threshold = 1
+)
+
+print(cong_result)
+summary(cong_result)
+```
+
+---
+
+# Session info
+
+```{r sessioninfo}
+sessionInfo()
+```

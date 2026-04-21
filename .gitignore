@@ -22,3 +22,7 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# personal files dropped at repo root (not for publication)
+/CV Nicholas Danks.pdf
+/Nicholas-Danks.png.webp

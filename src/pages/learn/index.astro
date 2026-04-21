@@ -1,0 +1,67 @@
+---
+import PageLayout from "../../layouts/PageLayout.astro";
+import SectionHeading from "../../components/shared/SectionHeading.astro";
+import TutorialCard from "../../components/learn/TutorialCard.astro";
+import Button from "../../components/shared/Button.astro";
+import { getCollection } from "astro:content";
+
+const allTutorials = await getCollection("tutorials");
+const tutorials = allTutorials.sort((a, b) => a.data.order - b.data.order);
+---
+
+<PageLayout
+  title="Learn PLS-SEM with SEMinR — Nicholas P. Danks"
+  description="Video companion series for Partial Least Squares Structural Equation Modeling Using R by Hair, Hult, Ringle, Sarstedt, Danks & Adler (Springer, 2e 2026)."
+>
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+    <SectionHeading
+      title="Learn PLS-SEM with SEMinR"
+      subtitle="A topic-by-topic video series pairing with the 2e of Partial Least Squares Structural Equation Modeling Using R (Hair, Hult, Ringle, Sarstedt, Danks & Adler, Springer). Each video ships with runnable code and walks you from model specification to publication-ready assessment."
+    />
+
+    <!-- Intro panel -->
+    <div class="mb-12 max-w-3xl">
+      <div class="p-6 rounded-xl bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800">
+        <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-3">
+          How to use this series
+        </h3>
+        <div class="space-y-3 text-surface-700 dark:text-surface-300 leading-relaxed text-sm">
+          <p>
+            Six topic videos cover the full PLS-SEM workflow, plus short <em>SEMinR Quick Tips</em>
+            between releases. Every video pairs with a chapter of the textbook, a runnable R script,
+            and one good R coding habit called out on screen &mdash; by the end of the series you'll
+            have absorbed ten reproducibility practices without ever sitting through a style lecture.
+          </p>
+          <p>
+            Start with <strong>Reflective measurement</strong> if you're new to PLS-SEM, or jump
+            straight to the topic that matches the paper you're working on.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3 mt-5">
+          <Button href="https://cran.r-project.org/package=seminr" variant="primary" size="sm" external>
+            Install SEMinR
+          </Button>
+          <Button href="https://github.com/sem-in-r/seminr" variant="secondary" size="sm" external>
+            Source on GitHub
+          </Button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tutorials grid -->
+    <div class="grid sm:grid-cols-2 gap-6">
+      {tutorials.map((tutorial) => (
+        <TutorialCard
+          title={tutorial.data.title}
+          topic={tutorial.data.topic}
+          chapter={tutorial.data.chapter}
+          order={tutorial.data.order}
+          summary={tutorial.data.summary}
+          videoStatus={tutorial.data.videoStatus}
+          durationMinutes={tutorial.data.durationMinutes}
+          slug={tutorial.id.replace(/\.md$/, "")}
+        />
+      ))}
+    </div>
+  </div>
+</PageLayout>

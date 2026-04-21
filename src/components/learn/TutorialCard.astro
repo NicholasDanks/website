@@ -1,0 +1,70 @@
+---
+import Card from "../shared/Card.astro";
+import Badge from "../shared/Badge.astro";
+
+interface Props {
+  title: string;
+  topic: string;
+  chapter: number;
+  order: number;
+  summary: string;
+  videoStatus: "planned" | "recorded" | "published";
+  durationMinutes?: number;
+  slug: string;
+}
+
+const {
+  title,
+  topic,
+  chapter,
+  order,
+  summary,
+  videoStatus,
+  durationMinutes,
+  slug,
+} = Astro.props;
+
+const statusLabel =
+  videoStatus === "published"
+    ? "Watch now"
+    : videoStatus === "recorded"
+    ? "Coming soon"
+    : "Planned";
+
+const statusVariant =
+  videoStatus === "published"
+    ? "accent"
+    : videoStatus === "recorded"
+    ? "primary"
+    : "neutral";
+---
+
+<a href={`/learn/${slug}`} class="block group">
+  <Card>
+    <div class="flex items-start justify-between mb-3 gap-4">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-xs font-mono text-surface-500 dark:text-surface-400">
+            Video {order} &middot; Chapter {chapter}
+          </span>
+          {durationMinutes && (
+            <span class="text-xs text-surface-500 dark:text-surface-400">
+              {durationMinutes} min
+            </span>
+          )}
+        </div>
+        <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-100 group-hover:text-accent-600 dark:group-hover:text-accent-400 transition-colors">
+          {title}
+        </h3>
+        <p class="text-sm text-surface-500 dark:text-surface-400 mt-0.5">
+          {topic}
+        </p>
+      </div>
+      <Badge label={statusLabel} variant={statusVariant} />
+    </div>
+
+    <p class="text-sm text-surface-600 dark:text-surface-400 leading-relaxed">
+      {summary}
+    </p>
+  </Card>
+</a>

@@ -45,8 +45,26 @@ const software = defineCollection({
   }),
 });
 
+const tutorials = defineCollection({
+  loader: glob({ pattern: '**/*.md', base: './src/data/tutorials' }),
+  schema: z.object({
+    title: z.string(),
+    topic: z.string(),
+    chapter: z.number(),
+    order: z.number(),
+    summary: z.string(),
+    learningOutcomes: z.array(z.string()),
+    videoStatus: z.enum(['planned', 'recorded', 'published']).default('planned'),
+    videoUrl: z.string().optional(),
+    durationMinutes: z.number().optional(),
+    codeFile: z.string().optional(),
+    rPractice: z.array(z.string()).default([]),
+  }),
+});
+
 export const collections = {
   publications,
   courses,
   software,
+  tutorials,
 };
