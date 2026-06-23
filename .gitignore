@@ -26,3 +26,6 @@ pnpm-debug.log*
 # personal files dropped at repo root (not for publication)
 /CV Nicholas Danks.pdf
 /Nicholas-Danks.png.webp
+
+# Quarto book-companion source (own nested git repo; only the knitted html/zip in public/ is published)
+/Quarto/

@@ -13,6 +13,7 @@ videoStatus: planned
 codeFile: "seminr-primer-v2-chap7.R"
 rPractice:
   - "Use version control — even a solo analysis deserves a Git history"
+companionAnchor: sec-moderation
 ---
 
 ## Coming soon

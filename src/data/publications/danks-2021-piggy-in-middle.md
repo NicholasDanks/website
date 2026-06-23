@@ -5,7 +5,7 @@ journal: "Data Base for Advances in Information Systems"
 year: 2021
 type: "article"
 doi: "10.1145/3505639.3505644"
-citations: 25
+citations: 51
 featured: false
 abstract: "Investigates the role of mediating variables as instrumental variables in PLS path model estimation, demonstrating how mediators can be leveraged to improve the consistency and accuracy of parameter estimates in composite-based structural equation models."
 ---

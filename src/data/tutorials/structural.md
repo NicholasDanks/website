@@ -15,6 +15,7 @@ codeFile: "seminr-primer-v2-chap6.R"
 rPractice:
   - "Use the native pipe |> for teaching code (R ≥ 4.1)"
   - "End every reproducible script with sessionInfo()"
+companionAnchor: sec-structural
 ---
 
 ## Coming soon

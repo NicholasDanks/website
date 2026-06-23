@@ -5,7 +5,7 @@ journal: "Management Science"
 year: 2024
 type: "article"
 doi: "10.1287/mnsc.2023.4705"
-citations: 45
+citations: 10
 featured: true
 abstract: "Introduces the Composite Overfit Analysis (COA) framework for assessing the out-of-sample generalizability of construct-based models using predictive deviance, deviance trees, and unstable paths. Published in Management Science (ABS4*/FT50/UTD)."
 ---

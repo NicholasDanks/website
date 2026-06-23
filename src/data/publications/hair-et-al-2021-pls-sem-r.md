@@ -6,7 +6,7 @@ year: 2021
 type: "book"
 doi: "10.1007/978-3-030-80519-7"
 url: ""
-citations: 5800
+citations: 88823
 featured: true
 abstract: "A comprehensive workbook providing a hands-on guide to partial least squares structural equation modeling (PLS-SEM) using the R programming language and the SEMinR package, covering model specification, estimation, and evaluation."
 ---

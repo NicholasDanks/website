@@ -5,15 +5,18 @@ interface Props {
   title: string;
   description?: string;
   ogImage?: string;
+  ogType?: string;
 }
 
 const {
   title,
   description = "Nicholas P. Danks — Associate Professor of Business Analytics at Trinity Business School, Trinity College Dublin. Research in PLS-SEM, predictive modeling, and model selection.",
   ogImage = "/images/og-default.png",
+  ogType = "website",
 } = Astro.props;
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const ogImageURL = new URL(ogImage, Astro.site);
 ---
 
 <!doctype html>
@@ -22,23 +25,30 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" href="/favicon.ico" sizes="any" />
     <link rel="canonical" href={canonicalURL} />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
 
     <title>{title}</title>
     <meta name="description" content={description} />
 
     <!-- Open Graph -->
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:site_name" content="Nicholas P. Danks" />
     <meta property="og:url" content={canonicalURL} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:image" content={new URL(ogImage, Astro.site)} />
+    <meta property="og:image" content={ogImageURL} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Nicholas P. Danks — Associate Professor of Business Analytics, Trinity College Dublin" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content={new URL(ogImage, Astro.site)} />
+    <meta name="twitter:image" content={ogImageURL} />
 
     <!-- Preload fonts -->
     <link
@@ -62,11 +72,21 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
         "@context": "https://schema.org",
         "@type": "Person",
         "name": "Nicholas P. Danks",
+        "givenName": "Nicholas",
+        "familyName": "Danks",
         "jobTitle": "Associate Professor of Business Analytics",
-        "affiliation": {
-          "@type": "Organization",
+        "image": "https://nicholasdanks.com/images/Nicholas-Danks.png.webp",
+        "worksFor": {
+          "@type": "CollegeOrUniversity",
           "name": "Trinity Business School, Trinity College Dublin"
         },
+        "knowsAbout": [
+          "Partial Least Squares Structural Equation Modeling",
+          "Predictive Modeling",
+          "Model Selection",
+          "Business Analytics",
+          "Structural Equation Modeling"
+        ],
         "url": "https://nicholasdanks.com",
         "sameAs": [
           "https://scholar.google.com/citations?user=D7nnR8gAAAAJ&hl=en",

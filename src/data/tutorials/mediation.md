@@ -13,6 +13,7 @@ videoStatus: planned
 codeFile: "seminr-primer-v2-chap8.R"
 rPractice:
   - "Save bootstrap artifacts with saveRDS() instead of re-running every session"
+companionAnchor: sec-mediation
 ---
 
 ## Coming soon

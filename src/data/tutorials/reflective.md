@@ -17,6 +17,7 @@ rPractice:
   - "Use RStudio Projects, not setwd()"
   - "Name objects for humans, not computers"
   - "Seed your bootstraps with set.seed() — always"
+companionAnchor: sec-reflective_mm
 ---
 
 ## The four criteria every reviewer checks

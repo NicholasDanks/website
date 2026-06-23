@@ -14,7 +14,7 @@ const tutorials = allTutorials.sort((a, b) => a.data.order - b.data.order);
   description="Video companion series for Partial Least Squares Structural Equation Modeling Using R by Hair, Hult, Ringle, Sarstedt, Danks & Adler (Springer, 2e 2026)."
 >
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
-    <SectionHeading
+    <SectionHeading as="h1"
       title="Learn PLS-SEM with SEMinR"
       subtitle="A topic-by-topic video series pairing with the 2e of Partial Least Squares Structural Equation Modeling Using R (Hair, Hult, Ringle, Sarstedt, Danks & Adler, Springer). Each video ships with runnable code and walks you from model specification to publication-ready assessment."
     />
@@ -43,6 +43,40 @@ const tutorials = allTutorials.sort((a, b) => a.data.order - b.data.order);
           </Button>
           <Button href="https://github.com/sem-in-r/seminr" variant="secondary" size="sm" external>
             Source on GitHub
+          </Button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Book companion code document -->
+    <div class="mb-12">
+      <div class="p-6 sm:p-8 rounded-xl border border-accent-200 dark:border-accent-800 bg-accent-50/50 dark:bg-accent-900/20">
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <span class="text-xs font-semibold uppercase tracking-wide text-accent-700 dark:text-accent-300">
+            New
+          </span>
+          <span class="text-xs text-surface-500 dark:text-surface-400">
+            Complete book companion
+          </span>
+        </div>
+        <h3 class="text-xl font-semibold text-surface-900 dark:text-surface-100 mb-3">
+          The full PLS-SEM Using R code companion
+        </h3>
+        <p class="text-surface-700 dark:text-surface-300 leading-relaxed text-sm max-w-3xl mb-5">
+          Every chapter of the textbook as one runnable document &mdash; concise R code and
+          its output for the complete corporate reputation workflow, from model specification
+          through reflective and formative measurement, structural assessment, moderation, and
+          mediation. The videos walk through subsets of this; this is the written reference you
+          can read end-to-end or jump into chapter by chapter. The
+          <a href="https://www.pls-sem.net/downloads/" class="underline hover:text-accent-600 dark:hover:text-accent-400" target="_blank" rel="noopener">corporate reputation dataset</a>
+          is available from the book's companion site.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <Button href="/learn/pls-sem-r-companion.html" variant="primary" size="sm" external>
+            Read the companion document
+          </Button>
+          <Button href="/learn/pls-sem-r-companion-source.zip" variant="secondary" size="sm" external>
+            Download the Quarto source
           </Button>
         </div>
       </div>

@@ -20,14 +20,39 @@ const researchInterests = [
   "Statistical Software Development",
   "Business Analytics",
 ];
+
+// schema.org ScholarlyArticle list for academic SEO / Google Scholar indexing
+const publicationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  itemListElement: sorted.map((pub, i) => ({
+    "@type": "ListItem",
+    position: i + 1,
+    item: {
+      "@type": pub.data.type === "book" ? "Book" : "ScholarlyArticle",
+      headline: pub.data.title,
+      name: pub.data.title,
+      author: pub.data.authors.map((name) => ({ "@type": "Person", name })),
+      isPartOf: { "@type": "Periodical", name: pub.data.journal },
+      datePublished: String(pub.data.year),
+      ...(pub.data.doi ? { sameAs: `https://doi.org/${pub.data.doi}` } : {}),
+      ...(pub.data.url ? { url: pub.data.url } : {}),
+    },
+  })),
+};
 ---
 
 <PageLayout
   title="Research & Publications — Nicholas P. Danks"
   description="Publications and research in PLS-SEM methodology, predictive modeling, and model selection by Nicholas P. Danks."
 >
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={JSON.stringify(publicationJsonLd)}
+  />
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
-    <SectionHeading
+    <SectionHeading as="h1"
       title="Research & Publications"
       subtitle="My research focuses on advancing statistical methodology for business and social science research."
     />

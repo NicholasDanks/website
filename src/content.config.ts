@@ -59,6 +59,7 @@ const tutorials = defineCollection({
     durationMinutes: z.number().optional(),
     codeFile: z.string().optional(),
     rPractice: z.array(z.string()).default([]),
+    companionAnchor: z.string().optional(),
   }),
 });
 

@@ -26,7 +26,12 @@ const {
   durationMinutes,
   codeFile,
   rPractice,
+  companionAnchor,
 } = tutorial.data;
+
+const companionUrl = companionAnchor
+  ? `/learn/pls-sem-r-companion.html#${companionAnchor}`
+  : null;
 
 const youtubeEmbed = (() => {
   if (!videoUrl) return null;
@@ -142,10 +147,15 @@ const youtubeEmbed = (() => {
     <!-- Footer CTAs -->
     <div class="mt-12 pt-8 border-t border-surface-200 dark:border-surface-800">
       <div class="flex flex-wrap gap-3">
+        {companionUrl && (
+          <Button href={companionUrl} variant="primary" external>
+            Open this chapter's book code
+          </Button>
+        )}
         {codeFile && (
           <Button
             href={`https://github.com/sem-in-r/seminr/blob/main/inst/examples/${codeFile}`}
-            variant="primary"
+            variant="secondary"
             external
           >
             Get the R code
