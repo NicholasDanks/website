@@ -28,9 +28,29 @@ import {
   type Dataset,
 } from "@seminr/core";
 import { RRNG } from "./rrng";
-import type { CongruenceResult, CongruenceRow } from "./congruence";
 
 export type Diagonal = "rhoA" | "rhoC";
+
+export interface CongruenceRow {
+  pair: string;
+  estimate: number;
+  diff: number;
+  bootSD: number;
+  tStat: number | null;
+  ciLo: number;
+  ciHi: number;
+  significant: boolean;
+}
+
+export interface CongruenceResult {
+  rows: CongruenceRow[];
+  alpha: number;
+  threshold: number;
+  nboot: number;
+  loLabel: string;
+  hiLabel: string;
+  inference: boolean;
+}
 
 export interface ModelCongruenceOptions {
   nboot?: number;

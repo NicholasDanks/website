@@ -31,6 +31,7 @@ const card =
            class="underline hover:text-accent-600 dark:hover:text-accent-400">Franke,
         Sarstedt &amp; Danks (2021)</a> &mdash; are two constructs empirically
         distinguishable in their nomological networks, or are they redundant?
+        Paste your item data and your SEMinR model; no R and no install.
       </p>
     </header>
 
@@ -46,8 +47,8 @@ const card =
           your own machine. There is no upload, no server, no account, and no
           logging. <strong>Nothing you paste is ever transmitted anywhere.</strong>
           Once this page has loaded, the only request it can make is fetching the
-          bundled example dataset from this site, and only if you press
-          &ldquo;Load example data&rdquo;.
+          bundled demo dataset from this site, and only if you press
+          &ldquo;Load demo values&rdquo;.
         </p>
         <p>
           You do not have to take our word for it: disconnect from the internet and
@@ -62,95 +63,43 @@ const card =
       </div>
     </section>
 
-    <!-- Mode tabs -->
-    <div class="mb-6 flex flex-wrap gap-2" role="tablist">
-      <button id="tab-indicator" type="button" role="tab"
-        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent-700 text-white">
-        Indicator data <span class="font-normal opacity-80">(recommended)</span>
-      </button>
-      <button id="tab-scores" type="button" role="tab"
-        class="px-4 py-2 rounded-lg text-sm font-semibold bg-surface-100 text-surface-800 dark:bg-surface-800 dark:text-surface-200">
-        Construct scores
-      </button>
-    </div>
+    <p class="text-sm text-surface-600 dark:text-surface-400 mb-6 max-w-3xl">
+      Your model is estimated here in your browser, and the bootstrap
+      <strong>re-estimates it on every resample</strong> &mdash; the same procedure as
+      <code>seminrExtras::congruence_test()</code>. HTMT is computed for you and shown
+      alongside the tested coefficients.
+    </p>
 
-    <!-- ===================== INDICATOR MODE ===================== -->
-    <div id="pane-indicator">
-      <p class="text-sm text-surface-600 dark:text-surface-400 mb-6 max-w-3xl">
-        Paste your raw item data and your SEMinR model. The model is estimated here
-        in your browser, and the bootstrap <strong>re-estimates it on every
-        resample</strong> &mdash; the same procedure as
-        <code>seminrExtras::congruence_test()</code>. This route also computes HTMT
-        for you.
+    <section class={card}>
+      <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
+        <span class="text-accent-600 dark:text-accent-400">1.</span> Paste your indicator data
+      </h2>
+      <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
+        One column per <em>item</em> with a header row of item names, one row per
+        case. Comma- or tab-separated, so pasting straight from Excel or SmartPLS
+        works. Extra columns are ignored. Missing values coded <code>-99</code> are
+        mean-replaced, as in the textbook.
       </p>
+      <textarea id="data" rows="7" spellcheck="false" class={box}
+        placeholder={"comp_1,comp_2,comp_3,like_1,…\n5,6,5,7,…"}></textarea>
+      <p id="data-status" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
+    </section>
 
-      <section class={card}>
-        <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
-          <span class="text-accent-600 dark:text-accent-400">1.</span> Paste your indicator data
-        </h2>
-        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
-          One column per <em>item</em> with a header row of item names, one row per
-          case. Comma- or tab-separated. Missing values coded <code>-99</code> are
-          mean-replaced, as in the textbook.
-        </p>
-        <textarea id="data" rows="7" spellcheck="false" class={box}
-          placeholder={"comp_1,comp_2,comp_3,like_1,…\n5,6,5,7,…"}></textarea>
-        <p id="data-status" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
-      </section>
-
-      <section class={card}>
-        <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
-          <span class="text-accent-600 dark:text-accent-400">2.</span> Paste your SEMinR model
-        </h2>
-        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
-          The same code you would run in R. <code>constructs()</code> with
-          <code>composite()</code> / <code>reflective()</code>,
-          <code>multi_items()</code> / <code>single_item()</code>, optional
-          <code>weights = mode_B</code>, plus <code>relationships()</code> with
-          <code>paths()</code>. Assignments and comments are fine.
-        </p>
-        <textarea id="code" rows="10" spellcheck="false" class={box}
-          placeholder={'mm <- constructs(\n  composite("COMP", multi_items("comp_", 1:3)),\n  composite("CUSA", single_item("cusa")))\n\nsm <- relationships(\n  paths(from = "COMP", to = "CUSA"))'}></textarea>
-        <p id="code-status" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
-      </section>
-    </div>
-
-    <!-- ===================== SCORES MODE ===================== -->
-    <div id="pane-scores" class="hidden">
-      <p class="text-sm text-surface-600 dark:text-surface-400 mb-6 max-w-3xl">
-        For when you only have exported construct scores and cannot rebuild the
-        model. The bootstrap resamples score rows with the measurement weights held
-        fixed, so point estimates match the full procedure but bootstrap standard
-        errors run about 10% wider &mdash; mildly conservative. HTMT cannot be
-        computed from scores; paste it below if you have it.
+    <section class={card}>
+      <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
+        <span class="text-accent-600 dark:text-accent-400">2.</span> Paste your SEMinR model
+      </h2>
+      <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
+        The same code you would run in R. <code>constructs()</code> with
+        <code>composite()</code> / <code>reflective()</code>,
+        <code>multi_items()</code> / <code>single_item()</code>, optional
+        <code>weights = mode_B</code>, plus <code>relationships()</code> with
+        <code>paths()</code>. Assignments and comments are fine.
       </p>
-
-      <section class={card}>
-        <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
-          <span class="text-accent-600 dark:text-accent-400">1.</span> Paste your construct scores
-        </h2>
-        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
-          One column per construct with a header row, one row per case. Copy straight
-          from SmartPLS &ldquo;Latent Variable Scores&rdquo;. A leading case-id column is fine.
-        </p>
-        <textarea id="scores" rows="7" spellcheck="false" class={box}
-          placeholder={"QUAL\tPERF\tCSOR\t…\n0.12\t-0.34\t0.88\t…"}></textarea>
-        <p id="scores-status" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
-      </section>
-
-      <section class={card}>
-        <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
-          <span class="text-accent-600 dark:text-accent-400">2.</span> Paste rho<sub>A</sub> reliabilities
-        </h2>
-        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
-          One construct per line: the name, then its rho<sub>A</sub>. Names must match
-          Step 1. Formative composites and single items conventionally take 1.
-        </p>
-        <textarea id="rhoa" rows="5" spellcheck="false" class={box}
-          placeholder={"QUAL\t0.91\nPERF\t0.88"}></textarea>
-        <p id="rhoa-status" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
-      </section>
-    </div>
+      <textarea id="code" rows="10" spellcheck="false" class={box}
+        placeholder={'mm <- constructs(\n  composite("COMP", multi_items("comp_", 1:3)),\n  composite("CUSA", single_item("cusa")))\n\nsm <- relationships(\n  paths(from = "COMP", to = "CUSA"))'}></textarea>
+      <p id="code-status" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
+    </section>
 
     <!-- Options -->
     <section class={card}>
@@ -173,7 +122,7 @@ const card =
           <input id="threshold" type="number" value="1" min="0.5" max="1" step="0.05" class={num} />
         </label>
       </div>
-      <div id="diagonal-wrap" class="mt-4 text-sm">
+      <div class="mt-4 text-sm">
         <span class="text-surface-700 dark:text-surface-300">Matrix diagonal</span>
         <div class="mt-2 flex flex-wrap gap-4">
           <label class="inline-flex items-center gap-2">
@@ -195,7 +144,7 @@ const card =
       </button>
       <button id="demo" type="button"
         class="inline-flex items-center gap-2 font-semibold rounded-lg px-6 py-3 text-base bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 transition-all">
-        Load example data
+        Load demo values
       </button>
     </div>
 
@@ -242,32 +191,26 @@ const card =
 </PageLayout>
 
 <script>
-  import type { WorkerRequest } from "../../lib/congruence/worker";
+  // Shape of the message the worker expects. Declared locally rather than
+  // imported, so the worker module stays out of this bundle's graph and Vite
+  // emits it exactly once.
+  interface WorkerRequest {
+    code: string;
+    dataText: string;
+    options: {
+      nboot: number;
+      seed: number;
+      alpha: number;
+      threshold: number;
+      diagonal: "rhoA" | "rhoC";
+    };
+  }
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const val = (id: string) => ($<HTMLInputElement>(id)).value;
 
-  let mode: "indicator" | "scores" = "indicator";
   let lastRows: string[][] = [];
   let worker: Worker | null = null;
-
-  const ACTIVE = "px-4 py-2 rounded-lg text-sm font-semibold bg-accent-700 text-white";
-  const IDLE =
-    "px-4 py-2 rounded-lg text-sm font-semibold bg-surface-100 text-surface-800 dark:bg-surface-800 dark:text-surface-200";
-
-  function setMode(m: "indicator" | "scores") {
-    mode = m;
-    $("tab-indicator").className = m === "indicator" ? ACTIVE : IDLE;
-    $("tab-scores").className = m === "scores" ? ACTIVE : IDLE;
-    $("pane-indicator").classList.toggle("hidden", m !== "indicator");
-    $("pane-scores").classList.toggle("hidden", m !== "scores");
-    // The diagonal choice only applies when we can compute rho_C ourselves.
-    $("diagonal-wrap").classList.toggle("hidden", m !== "indicator");
-    $("results").classList.add("hidden");
-    clearError();
-  }
-  $("tab-indicator").addEventListener("click", () => setMode("indicator"));
-  $("tab-scores").addEventListener("click", () => setMode("scores"));
 
   function showError(msg: string) {
     $("error").textContent = msg;
@@ -331,28 +274,24 @@ const card =
 
   $("run").addEventListener("click", () => {
     clearError();
-    const options = {
-      nboot: Math.max(100, Number(val("nboot")) || 2000),
-      seed: Number(val("seed")) || 123,
-      alpha: Number(val("alpha")) || 0.05,
-      threshold: Number(val("threshold")) || 1,
-    };
+    const diagonal = (document.querySelector('input[name="diagonal"]:checked') as HTMLInputElement)
+      ?.value as "rhoA" | "rhoC";
 
-    let req: WorkerRequest;
-    if (mode === "scores") {
-      req = { mode: "scores", scoresText: val("scores"), rhoaText: val("rhoa"), options };
-    } else {
-      const diagonal = (document.querySelector('input[name="diagonal"]:checked') as HTMLInputElement)
-        ?.value as "rhoA" | "rhoC";
-      req = { mode: "indicator", code: val("code"), dataText: val("data"),
-              options: { ...options, diagonal: diagonal ?? "rhoA" } };
-    }
+    const req: WorkerRequest = {
+      code: val("code"),
+      dataText: val("data"),
+      options: {
+        nboot: Math.max(100, Number(val("nboot")) || 2000),
+        seed: Number(val("seed")) || 123,
+        alpha: Number(val("alpha")) || 0.05,
+        threshold: Number(val("threshold")) || 1,
+        diagonal: diagonal ?? "rhoA",
+      },
+    };
 
     setBusy(true);
     $("progress-text").textContent =
-      mode === "indicator"
-        ? "Estimating the model and re-estimating it on every resample…"
-        : "Bootstrapping…";
+      "Estimating the model and re-estimating it on every resample…";
 
     worker?.terminate();
     worker = new Worker(new URL("../../lib/congruence/worker.ts", import.meta.url), { type: "module" });
@@ -375,10 +314,9 @@ const card =
   $("demo").addEventListener("click", async () => {
     clearError();
     try {
-      if (mode === "indicator") {
-        const d = await fetch("/congruence-demo/corp_rep_data.csv").then((x) => x.text());
-        $<HTMLTextAreaElement>("data").value = d.trim();
-        $<HTMLTextAreaElement>("code").value =
+      const d = await fetch("/congruence-demo/corp_rep_data.csv").then((x) => x.text());
+      $<HTMLTextAreaElement>("data").value = d.trim();
+      $<HTMLTextAreaElement>("code").value =
 `corp_rep_mm <- constructs(
   composite("COMP", multi_items("comp_", 1:3)),
   composite("LIKE", multi_items("like_", 1:3)),
@@ -388,19 +326,12 @@ const card =
 corp_rep_sm <- relationships(
   paths(from = c("COMP", "LIKE"), to = c("CUSA", "CUSL")),
   paths(from = "CUSA",            to = "CUSL"))`;
-        $("data-status").textContent = "Example loaded: corporate reputation, 344 cases.";
-      } else {
-        const [s, r] = await Promise.all([
-          fetch("/congruence-demo/demo_scores.csv").then((x) => x.text()),
-          fetch("/congruence-demo/demo_rhoA.csv").then((x) => x.text()),
-        ]);
-        $<HTMLTextAreaElement>("scores").value = s.trim();
-        $<HTMLTextAreaElement>("rhoa").value = r.trim().split("\n").slice(1)
-          .map((l) => l.replace(/"/g, "").replace(",", "\t")).join("\n");
-        $("scores-status").textContent = "Example loaded: 6 constructs, 344 cases.";
-      }
+      $("data-status").textContent =
+        "Demo loaded: corporate reputation data, 344 cases × 41 columns.";
+      $("code-status").textContent =
+        "Demo model: the four-construct core model from Chapter 4 of the textbook.";
     } catch {
-      showError("Could not load the example data.");
+      showError("Could not load the demo values.");
     }
   });
 
@@ -409,6 +340,4 @@ corp_rep_sm <- relationships(
     $("copy").textContent = "Copied";
     setTimeout(() => ($("copy").textContent = "Copy as TSV"), 1500);
   });
-
-  setMode("indicator");
 </script>

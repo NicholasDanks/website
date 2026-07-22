@@ -7,9 +7,9 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "test:congruence": "tsx test/congruence-parity.mjs",
-    "test:congruence-model": "tsx test/congruence-model-parity.mjs",
-    "test": "npm run test:congruence && npm run test:congruence-model"
+    "test:congruence": "tsx test/congruence-model-parity.mjs",
+    "test": "npm run test:rng && npm run test:congruence",
+    "test:rng": "tsx test/rng-parity.mjs"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.3.0",
