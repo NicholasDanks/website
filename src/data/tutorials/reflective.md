@@ -11,7 +11,10 @@ learningOutcomes:
   - "Report Cronbach alpha, rho_A, and composite reliability, and know which to lead with"
   - "Use HTMT and bootstrapped HTMT confidence intervals to test discriminant validity"
   - "Know where to look in Chapter 4 for the theoretical backing"
-videoStatus: planned
+videoStatus: published
+videoUrl: "https://youtu.be/eIaWe4bv6Ys"
+slidesFile: "reflective-measurement-slides.pptx"
+durationMinutes: 34
 codeFile: "seminr-primer-v2-chap4.R"
 rPractice:
   - "Use RStudio Projects, not setwd()"

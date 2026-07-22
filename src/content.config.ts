@@ -58,6 +58,7 @@ const tutorials = defineCollection({
     videoUrl: z.string().optional(),
     durationMinutes: z.number().optional(),
     codeFile: z.string().optional(),
+    slidesFile: z.string().optional(),
     rPractice: z.array(z.string()).default([]),
     companionAnchor: z.string().optional(),
   }),

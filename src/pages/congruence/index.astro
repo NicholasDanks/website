@@ -1,0 +1,414 @@
+---
+import PageLayout from "../../layouts/PageLayout.astro";
+import Button from "../../components/shared/Button.astro";
+import Badge from "../../components/shared/Badge.astro";
+
+const box =
+  "w-full font-mono text-xs p-3 rounded-lg border border-surface-300 dark:border-surface-700 bg-surface-50 dark:bg-surface-950 text-surface-900 dark:text-surface-100";
+const num =
+  "mt-1 w-full px-3 py-2 rounded-lg border border-surface-300 dark:border-surface-700 bg-surface-50 dark:bg-surface-950 text-surface-900 dark:text-surface-100";
+const card =
+  "mb-6 p-6 rounded-xl bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800";
+---
+
+<PageLayout
+  title="Congruence Test — Nicholas P. Danks"
+  description="Bootstrapped congruence-coefficient test (Franke, Sarstedt & Danks, 2021). Runs entirely on your own computer — nothing you paste is transmitted anywhere."
+>
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+    <header class="mb-8">
+      <div class="flex flex-wrap items-center gap-2 mb-4">
+        <Badge label="Web App" variant="primary" />
+        <Badge label="Runs on your computer" variant="accent" />
+        <Badge label="No upload" variant="neutral" />
+      </div>
+      <h1 class="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-surface-50 mb-4">
+        Congruence Test
+      </h1>
+      <p class="text-lg text-surface-600 dark:text-surface-400 leading-relaxed">
+        The bootstrapped congruence-coefficient test of
+        <a href="https://doi.org/10.1016/j.jbusres.2021.03.011" target="_blank" rel="noopener"
+           class="underline hover:text-accent-600 dark:hover:text-accent-400">Franke,
+        Sarstedt &amp; Danks (2021)</a> &mdash; are two constructs empirically
+        distinguishable in their nomological networks, or are they redundant?
+      </p>
+    </header>
+
+    <!-- Privacy panel -->
+    <section class="mb-10 p-6 rounded-xl border border-accent-200 dark:border-accent-800 bg-accent-50/50 dark:bg-accent-900/20">
+      <h2 class="text-base font-semibold text-surface-900 dark:text-surface-100 mb-3">
+        Your data never leaves your computer
+      </h2>
+      <div class="space-y-3 text-sm text-surface-700 dark:text-surface-300 leading-relaxed">
+        <p>
+          The entire analysis &mdash; estimating the model, every bootstrap
+          resample, every confidence interval &mdash; runs inside your browser, on
+          your own machine. There is no upload, no server, no account, and no
+          logging. <strong>Nothing you paste is ever transmitted anywhere.</strong>
+          Once this page has loaded, the only request it can make is fetching the
+          bundled example dataset from this site, and only if you press
+          &ldquo;Load example data&rdquo;.
+        </p>
+        <p>
+          You do not have to take our word for it: disconnect from the internet and
+          run your analysis anyway. It works offline. That check takes ten seconds
+          and proves the point better than any badge.
+        </p>
+        <p>
+          The engine is the open-source TypeScript port of SEMinR and seminrExtras,
+          and it reproduces the R implementation exactly &mdash; including R's random
+          number generator, so a given seed resamples the same rows R would.
+        </p>
+      </div>
+    </section>
+
+    <!-- Mode tabs -->
+    <div class="mb-6 flex flex-wrap gap-2" role="tablist">
+      <button id="tab-indicator" type="button" role="tab"
+        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent-700 text-white">
+        Indicator data <span class="font-normal opacity-80">(recommended)</span>
+      </button>
+      <button id="tab-scores" type="button" role="tab"
+        class="px-4 py-2 rounded-lg text-sm font-semibold bg-surface-100 text-surface-800 dark:bg-surface-800 dark:text-surface-200">
+        Construct scores
+      </button>
+    </div>
+
+    <!-- ===================== INDICATOR MODE ===================== -->
+    <div id="pane-indicator">
+      <p class="text-sm text-surface-600 dark:text-surface-400 mb-6 max-w-3xl">
+        Paste your raw item data and your SEMinR model. The model is estimated here
+        in your browser, and the bootstrap <strong>re-estimates it on every
+        resample</strong> &mdash; the same procedure as
+        <code>seminrExtras::congruence_test()</code>. This route also computes HTMT
+        for you.
+      </p>
+
+      <section class={card}>
+        <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
+          <span class="text-accent-600 dark:text-accent-400">1.</span> Paste your indicator data
+        </h2>
+        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
+          One column per <em>item</em> with a header row of item names, one row per
+          case. Comma- or tab-separated. Missing values coded <code>-99</code> are
+          mean-replaced, as in the textbook.
+        </p>
+        <textarea id="data" rows="7" spellcheck="false" class={box}
+          placeholder={"comp_1,comp_2,comp_3,like_1,…\n5,6,5,7,…"}></textarea>
+        <p id="data-status" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
+      </section>
+
+      <section class={card}>
+        <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
+          <span class="text-accent-600 dark:text-accent-400">2.</span> Paste your SEMinR model
+        </h2>
+        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
+          The same code you would run in R. <code>constructs()</code> with
+          <code>composite()</code> / <code>reflective()</code>,
+          <code>multi_items()</code> / <code>single_item()</code>, optional
+          <code>weights = mode_B</code>, plus <code>relationships()</code> with
+          <code>paths()</code>. Assignments and comments are fine.
+        </p>
+        <textarea id="code" rows="10" spellcheck="false" class={box}
+          placeholder={'mm <- constructs(\n  composite("COMP", multi_items("comp_", 1:3)),\n  composite("CUSA", single_item("cusa")))\n\nsm <- relationships(\n  paths(from = "COMP", to = "CUSA"))'}></textarea>
+        <p id="code-status" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
+      </section>
+    </div>
+
+    <!-- ===================== SCORES MODE ===================== -->
+    <div id="pane-scores" class="hidden">
+      <p class="text-sm text-surface-600 dark:text-surface-400 mb-6 max-w-3xl">
+        For when you only have exported construct scores and cannot rebuild the
+        model. The bootstrap resamples score rows with the measurement weights held
+        fixed, so point estimates match the full procedure but bootstrap standard
+        errors run about 10% wider &mdash; mildly conservative. HTMT cannot be
+        computed from scores; paste it below if you have it.
+      </p>
+
+      <section class={card}>
+        <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
+          <span class="text-accent-600 dark:text-accent-400">1.</span> Paste your construct scores
+        </h2>
+        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
+          One column per construct with a header row, one row per case. Copy straight
+          from SmartPLS &ldquo;Latent Variable Scores&rdquo;. A leading case-id column is fine.
+        </p>
+        <textarea id="scores" rows="7" spellcheck="false" class={box}
+          placeholder={"QUAL\tPERF\tCSOR\t…\n0.12\t-0.34\t0.88\t…"}></textarea>
+        <p id="scores-status" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
+      </section>
+
+      <section class={card}>
+        <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
+          <span class="text-accent-600 dark:text-accent-400">2.</span> Paste rho<sub>A</sub> reliabilities
+        </h2>
+        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
+          One construct per line: the name, then its rho<sub>A</sub>. Names must match
+          Step 1. Formative composites and single items conventionally take 1.
+        </p>
+        <textarea id="rhoa" rows="5" spellcheck="false" class={box}
+          placeholder={"QUAL\t0.91\nPERF\t0.88"}></textarea>
+        <p id="rhoa-status" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
+      </section>
+    </div>
+
+    <!-- Options -->
+    <section class={card}>
+      <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-4">Options</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <label class="block text-sm">
+          <span class="text-surface-700 dark:text-surface-300">Bootstrap samples</span>
+          <input id="nboot" type="number" value="2000" min="100" max="10000" step="100" class={num} />
+        </label>
+        <label class="block text-sm">
+          <span class="text-surface-700 dark:text-surface-300">Random seed</span>
+          <input id="seed" type="number" value="123" min="1" class={num} />
+        </label>
+        <label class="block text-sm">
+          <span class="text-surface-700 dark:text-surface-300">Alpha</span>
+          <input id="alpha" type="number" value="0.05" min="0.001" max="0.5" step="0.01" class={num} />
+        </label>
+        <label class="block text-sm">
+          <span class="text-surface-700 dark:text-surface-300">Threshold</span>
+          <input id="threshold" type="number" value="1" min="0.5" max="1" step="0.05" class={num} />
+        </label>
+      </div>
+      <div id="diagonal-wrap" class="mt-4 text-sm">
+        <span class="text-surface-700 dark:text-surface-300">Matrix diagonal</span>
+        <div class="mt-2 flex flex-wrap gap-4">
+          <label class="inline-flex items-center gap-2">
+            <input type="radio" name="diagonal" value="rhoA" checked />
+            <span>rho<sub>A</sub> <span class="text-surface-500 dark:text-surface-400">(default)</span></span>
+          </label>
+          <label class="inline-flex items-center gap-2">
+            <input type="radio" name="diagonal" value="rhoC" />
+            <span>rho<sub>C</sub> <span class="text-surface-500 dark:text-surface-400">&mdash; reproduces <code>congruence_test()</code> exactly</span></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <div class="flex flex-wrap gap-3 mb-4">
+      <button id="run" type="button"
+        class="inline-flex items-center gap-2 font-semibold rounded-lg px-6 py-3 text-base bg-accent-700 text-white hover:bg-accent-800 shadow-sm hover:shadow-md transition-all disabled:opacity-50">
+        Run congruence test
+      </button>
+      <button id="demo" type="button"
+        class="inline-flex items-center gap-2 font-semibold rounded-lg px-6 py-3 text-base bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 transition-all">
+        Load example data
+      </button>
+    </div>
+
+    <div id="progress-wrap" class="hidden mb-8">
+      <div class="h-2 w-full rounded-full bg-surface-200 dark:bg-surface-800 overflow-hidden">
+        <div id="progress-bar" class="h-full w-0 bg-accent-600 transition-all duration-150"></div>
+      </div>
+      <p id="progress-text" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
+    </div>
+
+    <div id="error" class="hidden mb-8 p-4 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-sm text-red-800 dark:text-red-200"></div>
+
+    <section id="results" class="hidden">
+      <h2 class="text-xl font-bold text-surface-900 dark:text-surface-50 mb-2">Results</h2>
+      <p id="results-caption" class="text-sm text-surface-600 dark:text-surface-400 mb-4"></p>
+      <div class="overflow-x-auto rounded-xl border border-surface-200 dark:border-surface-800">
+        <table class="w-full text-sm">
+          <thead class="bg-surface-100 dark:bg-surface-800"><tr id="results-head"></tr></thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+      <p id="reliability-note" class="text-xs mt-3 text-surface-500 dark:text-surface-400"></p>
+      <div class="mt-4">
+        <button id="copy" type="button"
+          class="inline-flex items-center gap-2 font-semibold rounded-lg px-3 py-1.5 text-sm bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700">
+          Copy as TSV
+        </button>
+      </div>
+      <div class="mt-6 p-5 rounded-xl bg-surface-50 dark:bg-surface-900/50 border border-surface-200 dark:border-surface-800 text-sm text-surface-700 dark:text-surface-300 leading-relaxed">
+        <p><strong>How to read this.</strong> A pair is <em>significant</em> when the
+        whole bootstrap confidence interval falls <em>below</em> the threshold &mdash;
+        the two constructs are empirically distinguishable. <strong>Non-significant
+        pairs are the ones to worry about:</strong> redundancy cannot be ruled out.</p>
+      </div>
+    </section>
+
+    <div class="mt-12 pt-8 border-t border-surface-200 dark:border-surface-800 flex flex-wrap gap-3">
+      <Button href="https://github.com/sem-in-r/seminrExtras" variant="secondary" external>
+        seminrExtras on GitHub
+      </Button>
+      <Button href="/software" variant="secondary">All software</Button>
+    </div>
+  </div>
+</PageLayout>
+
+<script>
+  import type { WorkerRequest } from "../../lib/congruence/worker";
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const val = (id: string) => ($<HTMLInputElement>(id)).value;
+
+  let mode: "indicator" | "scores" = "indicator";
+  let lastRows: string[][] = [];
+  let worker: Worker | null = null;
+
+  const ACTIVE = "px-4 py-2 rounded-lg text-sm font-semibold bg-accent-700 text-white";
+  const IDLE =
+    "px-4 py-2 rounded-lg text-sm font-semibold bg-surface-100 text-surface-800 dark:bg-surface-800 dark:text-surface-200";
+
+  function setMode(m: "indicator" | "scores") {
+    mode = m;
+    $("tab-indicator").className = m === "indicator" ? ACTIVE : IDLE;
+    $("tab-scores").className = m === "scores" ? ACTIVE : IDLE;
+    $("pane-indicator").classList.toggle("hidden", m !== "indicator");
+    $("pane-scores").classList.toggle("hidden", m !== "scores");
+    // The diagonal choice only applies when we can compute rho_C ourselves.
+    $("diagonal-wrap").classList.toggle("hidden", m !== "indicator");
+    $("results").classList.add("hidden");
+    clearError();
+  }
+  $("tab-indicator").addEventListener("click", () => setMode("indicator"));
+  $("tab-scores").addEventListener("click", () => setMode("scores"));
+
+  function showError(msg: string) {
+    $("error").textContent = msg;
+    $("error").classList.remove("hidden");
+    $("results").classList.add("hidden");
+  }
+  function clearError() { $("error").classList.add("hidden"); }
+
+  const fmt = (x: number | null, d = 4) =>
+    x === null || !Number.isFinite(x as number) ? "—" : (x as number).toFixed(d);
+
+  function render(res: any) {
+    const hasHtmt = Array.isArray(res.htmtRows) && res.htmtRows.length === res.rows.length;
+    const head = ["Pair", "Original Est.", "Diff", "Bootstrap SD", "T Stat.",
+                  res.loLabel, res.hiLabel, "Significant"];
+    if (hasHtmt) head.splice(2, 0, "HTMT-based");
+
+    $("results-head").innerHTML = head
+      .map((h) => `<th class="text-left font-semibold px-3 py-2 text-surface-700 dark:text-surface-300 whitespace-nowrap">${h}</th>`)
+      .join("");
+
+    lastRows = [head];
+    $("results-body").innerHTML = res.rows.map((r: any, i: number) => {
+      const cells = [r.pair, fmt(r.estimate)];
+      if (hasHtmt) cells.push(fmt(res.htmtRows[i].estimate));
+      cells.push(fmt(r.diff), fmt(r.bootSD), fmt(r.tStat, 3), fmt(r.ciLo), fmt(r.ciHi),
+                 r.significant ? "Yes" : "No");
+      lastRows.push(cells);
+      const flag = r.significant
+        ? `<span class="text-emerald-700 dark:text-emerald-400 font-semibold">Yes</span>`
+        : `<span class="text-amber-700 dark:text-amber-400 font-semibold">No</span>`;
+      return `<tr class="border-t border-surface-200 dark:border-surface-800">${
+        cells.slice(0, -1).map((c, j) =>
+          `<td class="px-3 py-2 ${j === 0 ? "font-mono text-xs whitespace-nowrap" : "tabular-nums"} text-surface-800 dark:text-surface-200">${c}</td>`
+        ).join("")}<td class="px-3 py-2">${flag}</td></tr>`;
+    }).join("");
+
+    const nonSig = res.rows.filter((r: any) => !r.significant).length;
+    const diag = res.diagonal === "rhoC" ? "rho_C" : "rho_A";
+    $("results-caption").textContent =
+      `${res.rows.length} construct pairs · ${res.nboot} bootstrap resamples · threshold ${res.threshold} · ` +
+      `${diag} on the diagonal · ` +
+      (nonSig === 0
+        ? "every pair is empirically distinguishable."
+        : `${nonSig} pair${nonSig === 1 ? "" : "s"} could not be distinguished from the threshold.`);
+
+    $("reliability-note").textContent = res.reliabilities
+      ? "Reliabilities used: " +
+        Object.entries(res.reliabilities).map(([k, v]) => `${k} ${(v as number).toFixed(3)}`).join(" · ")
+      : "";
+
+    $("results").classList.remove("hidden");
+  }
+
+  function setBusy(busy: boolean) {
+    ($("run") as HTMLButtonElement).disabled = busy;
+    $("run").textContent = busy ? "Running…" : "Run congruence test";
+    $("progress-wrap").classList.toggle("hidden", !busy);
+    if (!busy) ($("progress-bar") as HTMLElement).style.width = "0%";
+  }
+
+  $("run").addEventListener("click", () => {
+    clearError();
+    const options = {
+      nboot: Math.max(100, Number(val("nboot")) || 2000),
+      seed: Number(val("seed")) || 123,
+      alpha: Number(val("alpha")) || 0.05,
+      threshold: Number(val("threshold")) || 1,
+    };
+
+    let req: WorkerRequest;
+    if (mode === "scores") {
+      req = { mode: "scores", scoresText: val("scores"), rhoaText: val("rhoa"), options };
+    } else {
+      const diagonal = (document.querySelector('input[name="diagonal"]:checked') as HTMLInputElement)
+        ?.value as "rhoA" | "rhoC";
+      req = { mode: "indicator", code: val("code"), dataText: val("data"),
+              options: { ...options, diagonal: diagonal ?? "rhoA" } };
+    }
+
+    setBusy(true);
+    $("progress-text").textContent =
+      mode === "indicator"
+        ? "Estimating the model and re-estimating it on every resample…"
+        : "Bootstrapping…";
+
+    worker?.terminate();
+    worker = new Worker(new URL("../../lib/congruence/worker.ts", import.meta.url), { type: "module" });
+    worker.onmessage = (e: MessageEvent<any>) => {
+      const m = e.data;
+      if (m.type === "progress") {
+        ($("progress-bar") as HTMLElement).style.width = `${Math.round(m.fraction * 100)}%`;
+      } else if (m.type === "done") {
+        setBusy(false);
+        render(m.result);
+      } else {
+        setBusy(false);
+        showError(m.message);
+      }
+    };
+    worker.onerror = (err) => { setBusy(false); showError(err.message || "The analysis failed."); };
+    worker.postMessage(req);
+  });
+
+  $("demo").addEventListener("click", async () => {
+    clearError();
+    try {
+      if (mode === "indicator") {
+        const d = await fetch("/congruence-demo/corp_rep_data.csv").then((x) => x.text());
+        $<HTMLTextAreaElement>("data").value = d.trim();
+        $<HTMLTextAreaElement>("code").value =
+`corp_rep_mm <- constructs(
+  composite("COMP", multi_items("comp_", 1:3)),
+  composite("LIKE", multi_items("like_", 1:3)),
+  composite("CUSA", single_item("cusa")),
+  composite("CUSL", multi_items("cusl_", 1:3)))
+
+corp_rep_sm <- relationships(
+  paths(from = c("COMP", "LIKE"), to = c("CUSA", "CUSL")),
+  paths(from = "CUSA",            to = "CUSL"))`;
+        $("data-status").textContent = "Example loaded: corporate reputation, 344 cases.";
+      } else {
+        const [s, r] = await Promise.all([
+          fetch("/congruence-demo/demo_scores.csv").then((x) => x.text()),
+          fetch("/congruence-demo/demo_rhoA.csv").then((x) => x.text()),
+        ]);
+        $<HTMLTextAreaElement>("scores").value = s.trim();
+        $<HTMLTextAreaElement>("rhoa").value = r.trim().split("\n").slice(1)
+          .map((l) => l.replace(/"/g, "").replace(",", "\t")).join("\n");
+        $("scores-status").textContent = "Example loaded: 6 constructs, 344 cases.";
+      }
+    } catch {
+      showError("Could not load the example data.");
+    }
+  });
+
+  $("copy").addEventListener("click", async () => {
+    await navigator.clipboard.writeText(lastRows.map((r) => r.join("\t")).join("\n"));
+    $("copy").textContent = "Copied";
+    setTimeout(() => ($("copy").textContent = "Copy as TSV"), 1500);
+  });
+
+  setMode("indicator");
+</script>

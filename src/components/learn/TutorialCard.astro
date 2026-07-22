@@ -45,7 +45,7 @@ const statusVariant =
       <div class="min-w-0">
         <div class="flex items-center gap-2 mb-2">
           <span class="text-xs font-mono text-surface-500 dark:text-surface-400">
-            Video {order} &middot; Chapter {chapter}
+            Lesson {order}{chapter > 0 && <> &middot; Chapter {chapter}</>}
           </span>
           {durationMinutes && (
             <span class="text-xs text-surface-500 dark:text-surface-400">

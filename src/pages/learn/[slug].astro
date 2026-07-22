@@ -25,6 +25,7 @@ const {
   videoUrl,
   durationMinutes,
   codeFile,
+  slidesFile,
   rPractice,
   companionAnchor,
 } = tutorial.data;
@@ -38,6 +39,14 @@ const youtubeEmbed = (() => {
   const match = videoUrl.match(/(?:youtu\.be\/|v=)([A-Za-z0-9_-]{6,})/);
   return match ? `https://www.youtube.com/embed/${match[1]}` : null;
 })();
+
+// The chapter and method scripts ship as demos in the seminrExtras package;
+// the .Rmd walkthrough is served from this site.
+const codeUrl = codeFile
+  ? codeFile.endsWith(".R")
+    ? `https://github.com/sem-in-r/seminrExtras/blob/main/demo/${codeFile}`
+    : `/learn/${codeFile}`
+  : null;
 ---
 
 <PageLayout
@@ -58,8 +67,8 @@ const youtubeEmbed = (() => {
     <!-- Header -->
     <header class="mb-10">
       <div class="flex flex-wrap items-center gap-2 mb-4">
-        <Badge label={`Video ${order}`} variant="accent" />
-        <Badge label={`Chapter ${chapter}`} variant="primary" />
+        <Badge label={`Lesson ${order}`} variant="accent" />
+        {chapter > 0 && <Badge label={`Chapter ${chapter}`} variant="primary" />}
         <Badge label={topic} variant="neutral" />
         {durationMinutes && <Badge label={`${durationMinutes} min`} variant="neutral" />}
       </div>
@@ -152,13 +161,14 @@ const youtubeEmbed = (() => {
             Open this chapter's book code
           </Button>
         )}
-        {codeFile && (
-          <Button
-            href={`https://github.com/sem-in-r/seminr/blob/main/inst/examples/${codeFile}`}
-            variant="secondary"
-            external
-          >
+        {codeUrl && (
+          <Button href={codeUrl} variant="secondary" external>
             Get the R code
+          </Button>
+        )}
+        {slidesFile && (
+          <Button href={`/learn/slides/${slidesFile}`} variant="secondary" external>
+            Download the slides
           </Button>
         )}
         <Button href="https://cran.r-project.org/package=seminr" variant="secondary" external>

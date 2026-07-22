@@ -185,18 +185,26 @@ boot <span class="text-accent-400">&lt;-</span> <span class="text-primary-400">b
               Congruence Test
             </h2>
             <Badge label="Web App" variant="primary" />
-            <Badge label="Runs in your browser" variant="accent" />
+            <Badge label="Runs on your computer" variant="accent" />
+            <Badge label="No upload" variant="neutral" />
           </div>
           <p class="text-surface-600 dark:text-surface-400 leading-relaxed mb-4">
             An interactive tool for the bootstrapped congruence-coefficient test
             (Franke, Sarstedt &amp; Danks, 2021, <em>Journal of Business Research</em>).
             Paste your construct scores and rho_A reliabilities to test whether pairs of
             constructs are empirically distinguishable in their nomological networks —
-            no R and no install, and your data never leaves your browser. Optionally add
-            an HTMT matrix to compare disattenuated congruence coefficients.
+            no R and no install.
+          </p>
+          <p class="text-surface-600 dark:text-surface-400 leading-relaxed mb-4">
+            <strong>Nothing you paste is ever transmitted anywhere.</strong> The model is
+            estimated and bootstrapped inside your browser, on your own machine — no upload,
+            no server, no account, no logging. Disconnect from the internet and it still
+            works. It runs the open-source TypeScript ports of SEMinR and seminrExtras, and
+            reproduces the R implementation exactly — down to the random number generator,
+            so a given seed resamples the same rows R would.
           </p>
           <div class="flex flex-wrap gap-3">
-            <Button href="/congruence/" variant="primary" size="sm" external>
+            <Button href="/congruence/" variant="primary" size="sm">
               Launch App
             </Button>
             <Button href="https://github.com/sem-in-r/seminrExtras" variant="secondary" size="sm" external>

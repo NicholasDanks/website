@@ -2,7 +2,7 @@
 title: "seminrExtras 1.0.0 — The Advanced PLS-SEM Toolkit in R"
 topic: "seminrExtras"
 chapter: 0
-order: 7
+order: 6
 summary: "seminrExtras is a companion package for seminr that ships the advanced PLS-SEM assessment methods that don't fit the base workflow — COA, NCA, NCA-ESSE, cIPMA, FIMIX-PLS, PLS-POS, CTA-PLS, PCM, CVPAT, and congruence testing. This tutorial links to a fully runnable walkthrough on the MOBI and corporate reputation datasets."
 learningOutcomes:
   - "Install seminrExtras from CRAN and load it alongside seminr"
