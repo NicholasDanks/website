@@ -174,10 +174,18 @@ const card =
         </button>
       </div>
       <div class="mt-6 p-5 rounded-xl bg-surface-50 dark:bg-surface-900/50 border border-surface-200 dark:border-surface-800 text-sm text-surface-700 dark:text-surface-300 leading-relaxed">
-        <p><strong>How to read this.</strong> A pair is <em>significant</em> when the
-        whole bootstrap confidence interval falls <em>below</em> the threshold &mdash;
-        the two constructs are empirically distinguishable. <strong>Non-significant
-        pairs are the ones to worry about:</strong> redundancy cannot be ruled out.</p>
+        <p class="mb-3"><strong>How to read this.</strong> A pair is <em>significant</em>
+        when the whole bootstrap confidence interval falls <em>below</em> the threshold
+        &mdash; the two constructs are empirically distinguishable. <strong>Non-significant
+        pairs are the ones to worry about:</strong> redundancy cannot be ruled out.
+        <em>Diff</em> is the distance from the threshold; the verdict comes from the
+        confidence interval, not from <em>Diff</em> or <em>T Stat.</em></p>
+        <p><strong>The HTMT-based column on the right is a point estimate only.</strong>
+        It is congruence computed over the disattenuated HTMT matrix rather than the
+        construct correlation matrix, so comparing it with <em>Original Est.</em> shows
+        whether measurement error is inflating the apparent congruence. It is
+        <em>not</em> bootstrapped &mdash; no confidence interval, no significance test
+        &mdash; so treat it as context, never as a second verdict.</p>
       </div>
     </section>
 
@@ -224,28 +232,47 @@ const card =
 
   function render(res: any) {
     const hasHtmt = Array.isArray(res.htmtRows) && res.htmtRows.length === res.rows.length;
-    const head = ["Pair", "Original Est.", "Diff", "Bootstrap SD", "T Stat.",
-                  res.loLabel, res.hiLabel, "Significant"];
-    if (hasHtmt) head.splice(2, 0, "HTMT-based");
 
-    $("results-head").innerHTML = head
-      .map((h) => `<th class="text-left font-semibold px-3 py-2 text-surface-700 dark:text-surface-300 whitespace-nowrap">${h}</th>`)
-      .join("");
+    // The tested congruence test occupies the left of the table. HTMT-based
+    // congruence is appended on the right, visually separated, because it is a
+    // point estimate only — it never enters the bootstrap, so it carries no
+    // confidence interval and no verdict.
+    const TESTED = ["Pair", "Original Est.", "Diff", "Bootstrap SD", "T Stat.",
+                    res.loLabel, res.hiLabel, "Significant"];
+    const HINTS: Record<string, string> = {
+      "Diff": "Distance from the threshold: threshold − |congruence|",
+      "T Stat.": "Diff / bootstrap SD. Reported for reference; the verdict uses the CI.",
+      "Significant": "The whole CI falls below the threshold — the constructs are distinguishable.",
+    };
 
-    lastRows = [head];
+    const sep = "border-l border-surface-300 dark:border-surface-700";
+    const headHtml = TESTED.map((h) =>
+      `<th title="${HINTS[h] ?? ""}" class="text-left font-semibold px-3 py-2 text-surface-700 dark:text-surface-300 whitespace-nowrap">${h}</th>`
+    ).join("") + (hasHtmt
+      ? `<th title="Congruence over the disattenuated HTMT matrix. Point estimate only — not bootstrapped." class="text-left font-semibold px-3 py-2 text-surface-500 dark:text-surface-400 whitespace-nowrap ${sep}">HTMT-based <span class="font-normal">(point est.)</span></th>`
+      : "");
+    $("results-head").innerHTML = headHtml;
+
+    lastRows = [hasHtmt ? [...TESTED, "HTMT-based (point est.)"] : [...TESTED]];
+
     $("results-body").innerHTML = res.rows.map((r: any, i: number) => {
-      const cells = [r.pair, fmt(r.estimate)];
-      if (hasHtmt) cells.push(fmt(res.htmtRows[i].estimate));
-      cells.push(fmt(r.diff), fmt(r.bootSD), fmt(r.tStat, 3), fmt(r.ciLo), fmt(r.ciHi),
-                 r.significant ? "Yes" : "No");
-      lastRows.push(cells);
+      const numeric = [r.pair, fmt(r.estimate), fmt(r.diff), fmt(r.bootSD),
+                       fmt(r.tStat, 3), fmt(r.ciLo), fmt(r.ciHi)];
+      const verdict = r.significant ? "Yes" : "No";
+      const htmt = hasHtmt ? fmt(res.htmtRows[i].estimate) : null;
+      lastRows.push(htmt === null ? [...numeric, verdict] : [...numeric, verdict, htmt]);
+
       const flag = r.significant
         ? `<span class="text-emerald-700 dark:text-emerald-400 font-semibold">Yes</span>`
         : `<span class="text-amber-700 dark:text-amber-400 font-semibold">No</span>`;
+
       return `<tr class="border-t border-surface-200 dark:border-surface-800">${
-        cells.slice(0, -1).map((c, j) =>
+        numeric.map((c, j) =>
           `<td class="px-3 py-2 ${j === 0 ? "font-mono text-xs whitespace-nowrap" : "tabular-nums"} text-surface-800 dark:text-surface-200">${c}</td>`
-        ).join("")}<td class="px-3 py-2">${flag}</td></tr>`;
+        ).join("")}<td class="px-3 py-2">${flag}</td>${
+        htmt === null ? "" :
+          `<td class="px-3 py-2 tabular-nums text-surface-500 dark:text-surface-400 ${sep}">${htmt}</td>`
+      }</tr>`;
     }).join("");
 
     const nonSig = res.rows.filter((r: any) => !r.significant).length;
