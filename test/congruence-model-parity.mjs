@@ -106,5 +106,51 @@ console.log("\nrho_A default (shipped configuration)");
     Math.abs(res.rows[0].estimate - 0.96120055902328916) > 1e-6);
 }
 
+console.log("\nreflective() must use PLSc, not composite (regression)");
+{
+  // reflective() is a common factor (type "C", Mode A + PLSc disattenuation).
+  // Mapping it to composite() silently changes the estimator: COMP -> LIKE
+  // would come out 0.9612 instead of 0.9791. Ground truth from R 4.6.0.
+  const dataText = fs.readFileSync(path.join(root, "public", "congruence-demo", "corp_rep_data.csv"), "utf8");
+  const CODE_R = `mm <- constructs(
+  reflective("COMP", multi_items("comp_", 1:3)),
+  reflective("LIKE", multi_items("like_", 1:3)),
+  composite("CUSA", single_item("cusa")),
+  reflective("CUSL", multi_items("cusl_", 1:3)))
+sm <- relationships(
+  paths(from = c("COMP","LIKE"), to = c("CUSA","CUSL")),
+  paths(from = "CUSA", to = "CUSL"))`;
+
+  const parsed = parseSeminrModel(CODE_R);
+  check("reflective flag set on reflective() constructs",
+    parsed.constructs.filter((c) => c.reflective).length === 3);
+  check("composite() not flagged reflective",
+    parsed.constructs.find((c) => c.name === "CUSA").reflective === false);
+
+  let msg = "";
+  try {
+    parseSeminrModel('constructs(reflective("A", multi_items("a_",1:3), weights = mode_B), composite("B", multi_items("b_",1:3)))\nrelationships(paths(from="A",to="B"))');
+  } catch (e) { msg = e.message; }
+  check("reflective() + mode_B rejected", /different estimators/.test(msg), msg.slice(0, 50));
+
+  const res = runIndicatorRoute({
+    code: CODE_R, dataText,
+    options: { nboot: 100, seed: 123, alpha: 0.1, threshold: 1, diagonal: "rhoC" },
+  });
+  const truth = fs.readFileSync(path.join(root, "test", "fixtures-r-congruence-reflective.txt"), "utf8")
+    .trim().split("\n").map((l) => l.split("|"));
+  let worst = 0;
+  res.rows.forEach((r, i) => {
+    [[r.estimate, 1], [r.bootSD, 2]].forEach(([g, k]) => {
+      const t = Number(truth[i][k]);
+      worst = Math.max(worst, Math.abs(g - t) / Math.abs(t));
+    });
+  });
+  check("PLSc parity with R (< 1e-12 relative)", worst < 1e-12, `worst ${worst.toExponential(3)}`);
+  check("not silently estimated as composite",
+    Math.abs(res.rows[0].estimate - 0.96120055902328916) > 1e-6,
+    `COMP->LIKE ${res.rows[0].estimate.toFixed(6)} (composite would be 0.961201)`);
+}
+
 console.log(failures === 0 ? "\nAll model-route checks passed.\n" : `\n${failures} check(s) FAILED.\n`);
 process.exit(failures === 0 ? 0 : 1);

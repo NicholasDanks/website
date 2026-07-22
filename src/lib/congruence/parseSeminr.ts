@@ -8,7 +8,7 @@
  *   composite("NAME", multi_items("stub_", c(1,2,5)))
  *   composite("NAME", single_item("item"))
  *   composite("NAME", ..., weights = mode_B)      // or mode_A
- *   reflective("NAME", multi_items(...))          // treated as mode A composite
+ *   reflective("NAME", multi_items(...))          // common factor, PLSc — NOT a composite
  *   relationships( paths(from = c("A","B"), to = c("C")), ... )
  *
  * Assignment lines (`mm <- constructs(...)`) are fine; anything outside the
@@ -21,6 +21,12 @@ export interface ParsedConstruct {
   name: string;
   items: string[];
   modeB: boolean;
+  /**
+   * True for reflective(): a common-factor construct estimated consistently
+   * via PLSc (type "C"), which is a different estimator from composite() —
+   * not merely a labelling difference.
+   */
+  reflective: boolean;
 }
 
 export interface ParsedPath {
@@ -151,12 +157,18 @@ export function parseSeminrModel(source: string): ParsedModel {
     const parts = splitArgs(m[2]);
     if (parts.length < 2) throw new Error(`${m[1]}() needs a name and its items.`);
     const name = unquote(parts[0]);
+    const reflective = m[1] === "reflective";
     const modeB = parts.some((p) => /weights\s*=\s*mode_B/.test(p) || /^mode_B$/.test(p.trim()));
+    if (reflective && modeB) {
+      throw new Error(
+        `"${name}" is declared reflective() but also asks for mode_B weights — those are different estimators. Pick one.`,
+      );
+    }
     const items = parseItems(parts.slice(1), name);
     if (items.length === 0) {
       throw new Error(`Could not read any indicators for "${name}" — use multi_items() or single_item().`);
     }
-    constructsOut.push({ name, items, modeB });
+    constructsOut.push({ name, items, modeB, reflective });
   }
   if (constructsOut.length < 2) {
     throw new Error("Need at least two constructs to test congruence.");

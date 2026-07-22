@@ -4,7 +4,7 @@
  */
 
 import {
-  constructs, composite, multiItems, singleItem,
+  constructs, composite, reflective,
   relationships, paths, estimatePls, meanReplacement, modeB as MODE_B,
   parseCsv, type Dataset, type PlsModel,
 } from "@seminr/core";
@@ -23,13 +23,14 @@ export interface IndicatorRunOptions {
 /** Turn a parsed model into @seminr/core specs and estimate it. */
 export function buildAndEstimate(parsed: ParsedModel, data: Dataset): PlsModel {
   const specs = parsed.constructs.map((c) => {
-    const itemsArg =
-      c.items.length === 1
-        ? singleItem(c.items[0])
-        // Items were already expanded by the parser, so pass them verbatim
-        // rather than re-deriving a stub + index range.
-        : multiItems("", c.items as unknown as number[]);
-    return c.modeB ? composite(c.name, itemsArg, MODE_B) : composite(c.name, itemsArg);
+    // multi_items() and single_item() only build a string[] of item names, and
+    // the parser has already expanded them — so pass the names straight through.
+    const items = c.items;
+    // reflective() is a common factor estimated via PLSc (type "C"), not a
+    // mode A composite — mapping it to composite() would silently change the
+    // estimator and the numbers.
+    if (c.reflective) return reflective(c.name, items);
+    return c.modeB ? composite(c.name, items, MODE_B) : composite(c.name, items);
   });
 
   const mm = constructs(...specs);
@@ -67,10 +68,8 @@ export function runIndicatorRoute(input: IndicatorRunInput): ModelCongruenceResu
   const data = parseCsv(normalised) as Dataset;
 
   // Fail early and specifically if the data does not carry the model's items.
-  const cols: string[] =
-    (data as any).cols ?? (data as any).columns ?? Object.keys((data as any).values?.[0] ?? {});
   const needed = requiredItems(parsed);
-  const missing = needed.filter((i) => !cols.includes(i));
+  const missing = needed.filter((i) => !data.columns.includes(i));
   if (missing.length) {
     throw new Error(
       `The pasted data is missing ${missing.length} indicator${missing.length === 1 ? "" : "s"} the model needs: ` +

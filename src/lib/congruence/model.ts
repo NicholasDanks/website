@@ -1,16 +1,15 @@
 /**
- * Indicator-data route for the congruence test.
+ * The congruence test, over an estimated PLS model.
  *
- * The scores route (congruence.ts) resamples rows of a construct-score matrix
- * with the measurement weights frozen. This route does the faithful thing:
- * it re-estimates the whole PLS model on every bootstrap resample, exactly as
- * seminrExtras::congruence_test() does.
+ * The bootstrap re-estimates the whole model on every resample, exactly as
+ * seminrExtras::congruence_test() does — rather than resampling construct-score
+ * rows with the measurement weights frozen, which is only an approximation.
  *
  * The reliability placed on the matrix diagonal is a choice:
- *   - "rhoA" (default here) matches this app's long-standing convention and the
- *     scores route, so the two modes answer the same question.
+ *   - "rhoA" (the shipped default) matches this app's long-standing convention.
  *   - "rhoC" reproduces the published congruence_test() exactly. Validated
- *     against R 4.6.0 in test/congruence-model-parity.mjs.
+ *     against R 4.6.0 in test/congruence-model-parity.mjs, which is what proves
+ *     the machinery — rhoA is the same code path with a different diagonal.
  *
  * Bootstrap draws come from rrng.ts, which reproduces R's Mersenne-Twister and
  * post-3.6.0 "Rejection" sampler, so a given seed resamples the same rows R
@@ -204,7 +203,7 @@ export function congruenceFromModel(
   const orig = pairs.map(([a, b]) => cosine(base, a, b));
 
   // --- bootstrap: re-estimate the model on each resample --------------------
-  const rows: any[] = (data as any).values ?? (data as any).rows ?? data;
+  const rows = data.values;
   const n = rows.length;
   const rng = new RRNG(seed);
   const boot: Float64Array[] = pairs.map(() => new Float64Array(nboot));
@@ -212,9 +211,9 @@ export function congruenceFromModel(
 
   for (let b = 0; b < nboot; b++) {
     const idx = rng.sampleIntReplace(n, n);
-    const resampled = new Array(n);
+    const resampled: number[][] = new Array(n);
     for (let i = 0; i < n; i++) resampled[i] = rows[idx[i]];
-    const boots: Dataset = { ...(data as any), values: resampled, rows: resampled };
+    const boots: Dataset = { columns: data.columns, values: resampled };
     let m2: PlsModel;
     try {
       m2 = rerun(model, { data: boots });
