@@ -5,6 +5,9 @@ import Badge from "../components/shared/Badge.astro";
 import FilterBar from "../components/publications/FilterBar.astro";
 import PublicationCard from "../components/publications/PublicationCard.astro";
 import { getCollection } from "astro:content";
+import { site } from "../data/site";
+
+const researchInterests = site.researchInterests;
 
 const allPubs = await getCollection("publications");
 const sorted = allPubs.sort((a, b) => b.data.year - a.data.year || b.data.citations - a.data.citations);
@@ -12,14 +15,6 @@ const sorted = allPubs.sort((a, b) => b.data.year - a.data.year || b.data.citati
 const types = [...new Set(sorted.map((p) => p.data.type))].sort();
 const years = [...new Set(sorted.map((p) => p.data.year))].sort((a, b) => b - a);
 
-const researchInterests = [
-  "PLS-SEM Methodology",
-  "Predictive Modeling",
-  "Model Selection",
-  "Linear Regression",
-  "Statistical Software Development",
-  "Business Analytics",
-];
 
 // schema.org ScholarlyArticle list for academic SEO / Google Scholar indexing
 const publicationJsonLd = {

@@ -1,6 +1,9 @@
 ---
 import SectionHeading from "../shared/SectionHeading.astro";
 import Button from "../shared/Button.astro";
+import { getCollection } from "astro:content";
+
+const seminr = (await getCollection("software")).find((s) => s.id.replace(/\.md$/, "") === "seminr")?.data;
 ---
 
 <section class="py-16 sm:py-20 bg-surface-100/50 dark:bg-surface-900/50">
@@ -52,7 +55,7 @@ model <span class="text-accent-400">&lt;-</span> <span class="text-primary-400">
               CRAN Package
             </span>
             <span class="text-sm text-surface-500 dark:text-surface-400">
-              70,000+ downloads
+              {seminr?.downloads} downloads
             </span>
           </div>
 
@@ -103,8 +106,8 @@ model <span class="text-accent-400">&lt;-</span> <span class="text-primary-400">
             </svg>
             View on GitHub
           </Button>
-          <Button href="/software" variant="ghost">
-            Learn More
+          <Button href="/seminr/" variant="ghost">
+            Try it in your browser
           </Button>
         </div>
       </div>

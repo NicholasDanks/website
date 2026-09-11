@@ -4,8 +4,8 @@ tagline: "A Domain-Specific Language for Building and Estimating Structural Equa
 role: "Co-Creator & Maintainer"
 cran: "https://cran.r-project.org/package=seminr"
 github: "https://github.com/sem-in-r/seminr"
-version: "2.3.3"
-downloads: "70,000+"
+version: "2.5.0"
+downloads: "130,000+"
 featured: true
 ---
 

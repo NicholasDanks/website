@@ -4,6 +4,8 @@ tagline: "Extensions and Extra Features for SEMinR"
 role: "Creator & Maintainer"
 cran: "https://cran.r-project.org/package=seminrExtras"
 github: "https://github.com/sem-in-r/seminrExtras"
+version: "1.0.3"
+downloads: "5,800+"
 featured: false
 ---
 

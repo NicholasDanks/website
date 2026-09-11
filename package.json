@@ -7,19 +7,26 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "test:congruence": "tsx test/congruence-model-parity.mjs",
-    "test": "npm run test:rng && npm run test:congruence",
-    "test:rng": "tsx test/rng-parity.mjs"
+    "check": "astro check",
+    "test": "npm run test:rng && npm run test:congruence && npm run test:seminr",
+    "test:rng": "tsx test/rng-parity.mjs",
+    "test:congruence": "tsx test/congruence-parity.mjs",
+    "test:seminr": "tsx test/seminr-parity.mjs"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.3.0",
-    "@seminr/core": "^0.2.1",
-    "@seminr/extras": "^0.1.1",
+    "@hpcc-js/wasm-graphviz": "^1.29.0",
+    "@seminr/core": "^0.5.0",
+    "@seminr/extras": "^0.1.2",
+    "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.1.0",
     "astro": "^5.17.1",
     "tailwindcss": "^4.1.0"
   },
   "devDependencies": {
-    "tsx": "^4.23.1"
+    "@astrojs/check": "^0.9.10",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3"
   }
 }

@@ -29,3 +29,9 @@ pnpm-debug.log*
 
 # Quarto book-companion source (own nested git repo; only the knitted html/zip in public/ is published)
 /Quarto/
+
+# retired R Shiny version of the congruence test (superseded by src/lib/seminr)
+/congruence shiny app/
+
+# scratch scripts and outputs
+/test/tmp/
