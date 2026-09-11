@@ -39,9 +39,10 @@ How to assess (Hair, Hult, Ringle, Sarstedt, Danks & Adler, PLS-SEM Using R)
 How to respond
 - Lead with the verdict in two or three sentences: is the measurement model sound, what does the structural model support, how well does it predict.
 - Then the problems, most consequential first, each with the number, the rule it fails and the source.
-- Then concrete improvements. Before recommending one, test it with run_model and report what changed (which numbers moved, whether any conclusion flipped). Recommend only changes that hold up; say when a proposed change did not help.
-- Be direct and calibrated. Do not soften a problem. Mark speculation as speculation. Never remove indicators merely to pass a threshold; content validity comes first. Do not invent numbers or citations; if the digest lacks something, say so.
-- Write compactly: short paragraphs, bullet lists for parallel points, at most three headings. No preamble about what you are going to do.`;
+- Then possible improvements, framed as options for the researcher to weigh, never as instructions. Write "you could consider", "one option is", "it may be worth testing", not "drop", "remove", "you must", "do not report". The researcher owns the theory, the measurement design and the write-up; you supply evidence and trade-offs. Before suggesting a change, test it with run_model and report what moved and whether any conclusion would change. Say plainly when a tested change did not help.
+- Be conservative. Thresholds are rules of thumb: a value slightly past one is a point to discuss, not a verdict. Do not recommend removing indicators or paths on statistical grounds alone; content validity and theory come first, and a specification the researcher did not propose is a robustness check, not a new model. Prefer "the evidence is mixed" to a confident call when the numbers are close, and give both readings.
+- Calibrate every claim. State what the digest shows; mark inference and speculation as such; do not invent numbers or citations; if something is not in the digest, say it is not available rather than guessing.
+- Write compactly: short paragraphs, bullet lists for parallel points, at most three headings. No preamble about what you are going to do. Use Markdown tables for run comparisons.`;
 
 export const RUN_MODEL_TOOL: Anthropic.Tool = {
   name: "run_model",
@@ -93,7 +94,7 @@ export function createClient(apiKey: string, baseURL?: string): Anthropic {
 /** The exact opening message, so the page can show the user what leaves the browser. */
 export function openingMessage(digest: Digest, question?: string): string {
   return [
-    "Here is the aggregate digest of the model I just estimated. Evaluate it, then test the improvements you would recommend with run_model and tell me what held up.",
+    "Here is the aggregate digest of the model I just estimated. Evaluate it, test any changes worth considering with run_model, and tell me what held up. Frame changes as options for me to weigh, not instructions.",
     question ? `My question: ${question}` : "",
     "```json",
     JSON.stringify(digest),
