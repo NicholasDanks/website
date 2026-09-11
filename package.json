@@ -14,6 +14,7 @@
     "test:seminr": "tsx test/seminr-parity.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "@astrojs/sitemap": "^3.3.0",
     "@hpcc-js/wasm-graphviz": "^1.29.0",
     "@seminr/core": "^0.5.0",

@@ -636,6 +636,15 @@ export const REPORT_CSS = `
 .report pre.code{background:var(--head);border:1px solid var(--line);border-radius:.5rem;padding:1rem;overflow-x:auto;font-size:.8rem;line-height:1.45}
 .report button.copy{font:inherit;font-size:.75rem;padding:.2rem .6rem;border:1px solid var(--line);border-radius:.4rem;background:var(--head);color:var(--fg);cursor:pointer;margin:.25rem .25rem .75rem 0}
 .report button.copy:hover{border-color:var(--accent)}
+.report .msg{border:1px solid var(--line);border-radius:.6rem;padding:.75rem 1rem;background:var(--bg)}
+.report .msg.user{background:var(--head)}
+.report .msg.tool{border-style:dashed}
+.report .msg .who{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.35rem}
+.report .msg .body p{margin:.4rem 0}
+.report .msg .body ul,.report .msg .body ol{margin:.4rem 0 .4rem 1.25rem}
+.report .msg .body h3,.report .msg .body h4,.report .msg .body h5{margin:.9rem 0 .3rem;font-size:.95rem}
+.report .msg .tool-head{margin-bottom:.25rem}
+.report .msg details{margin:.4rem 0}
 @media (max-width:640px){.report .v-row{flex-direction:column;gap:.2rem}.report .v-label{flex:none}}
 @media print{.report button.copy{display:none}.report details{border:none;padding:0}.report details>summary{display:none}.report details:not([open])>*:not(summary){display:block}}
 `;

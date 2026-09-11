@@ -209,6 +209,14 @@ console.log("\nBootstrap and derived stages");
     return Math.abs(sd - res.predict.naiveRmse[it]) < 1e-9;
   })());
   check("mediation chains carry a Zhao typology", res.mediation.specific.every((e) => ["complementary", "competitive", "indirect-only", "direct-only", "no effect"].includes(e.type)));
+  check("evaluator digest carries aggregates only", await (async () => {
+    const { buildDigest, digestLooksSafe } = await import("../src/lib/seminr/digest.ts");
+    const cols = parseDataText(dataText).data.columns;
+    const d = buildDigest(res, cols, "test");
+    const text = JSON.stringify(d);
+    const aRow = dataText.split("\n")[5].trim();
+    return digestLooksSafe(d) && !text.includes(aRow) && !text.includes("compositeScores") && text.length < 60000 && d.availableColumns.includes("qual_global") && d.paths.length === res.model.paths.length;
+  })());
   check("assessment splits gates from findings",
     res.assessment.some((a) => a.kind === "gate") && res.assessment.some((a) => a.kind === "finding") && res.assessment.filter((a) => a.kind === "finding").every((a) => a.status === "info"));
 }

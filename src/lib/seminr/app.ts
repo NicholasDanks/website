@@ -9,6 +9,8 @@ import type { AnalysisResult, AnalysisOptions, StageId, StageStatus } from "./an
 import type { WorkerMessage, WorkerRequest } from "./worker";
 import { parseSeminrModel, requiredItems, type ParsedModel } from "./parseSeminr";
 import { renderSections, renderStandaloneReport, REPORT_CSS, esc, type RenderContext } from "./report";
+import { buildDigest, digestLooksSafe, type Digest } from "./digest";
+import type { EvaluatorSession, RunModelInput } from "./evaluator";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const val = (id: string) => $<HTMLInputElement>(id).value;
@@ -33,6 +35,7 @@ let lastCtx: RenderContext | null = null;
 let dataName = "pasted data";
 let parsedModel: ParsedModel | null = null;
 let dataColumns: string[] = [];
+let lastOptions: AnalysisOptions | null = null;
 
 // ---------------------------------------------------------------------------
 // demos
@@ -315,6 +318,8 @@ function renderResults(result: AnalysisResult) {
   $("results-nav").innerHTML = sections.map((s) => `<a href="#${s.id}" class="px-2 py-1 rounded-md text-xs font-medium text-surface-600 dark:text-surface-400 hover:text-accent-600 dark:hover:text-accent-400 hover:bg-surface-100 dark:hover:bg-surface-800/60">${esc(s.title)}</a>`).join("");
   $("results-body").innerHTML = sections.map((s) => `<section id="${s.id}" class="scroll-mt-28"><h2>${esc(s.title)}</h2>${s.html}</section>`).join("");
   $("results").classList.remove("hidden");
+  $("evaluate").classList.remove("hidden");
+  $("eval-digest").classList.add("hidden");
 
   $("results-body").querySelectorAll<HTMLButtonElement>("button.copy[data-tsv]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -360,6 +365,7 @@ function run(quick: boolean) {
   persist();
 
   const req: WorkerRequest = { code, dataText, dataName, options: readOptions(quick) };
+  lastOptions = req.options;
   const state = new Map<StageId, { status: StageStatus; detail?: string; fraction?: number }>();
   renderStages(state);
   setBusy(true);
@@ -387,6 +393,220 @@ function run(quick: boolean) {
   };
   worker.onerror = (err) => { setBusy(false); showError(err.message || "The analysis failed."); };
   worker.postMessage(req);
+}
+
+/** Run one analysis in a fresh worker and resolve with the result (no UI). */
+function analyzeInWorker(req: WorkerRequest, onProgress?: (text: string) => void): Promise<AnalysisResult> {
+  return new Promise((resolve, reject) => {
+    const w = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+    w.onmessage = (e: MessageEvent<WorkerMessage>) => {
+      const m = e.data;
+      if (m.type === "stage" && m.status === "start") onProgress?.(STAGES.find((s) => s.id === m.stage)?.label ?? m.stage);
+      else if (m.type === "done") { w.terminate(); resolve(m.result); }
+      else if (m.type === "error") { w.terminate(); reject(new Error(m.message)); }
+    };
+    w.onerror = (err) => { w.terminate(); reject(new Error(err.message || "The analysis failed.")); };
+    w.postMessage(req);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// evaluation assistant (bring your own Anthropic key; nothing but aggregates leaves)
+// ---------------------------------------------------------------------------
+
+const KEY_STORAGE = "seminr-anthropic-key";
+let evalSession: EvaluatorSession | null = null;
+let evalAbort: AbortController | null = null;
+let evalBusy = false;
+const evalUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+const alternativeRuns = new Map<string, { input: RunModelInput; result: AnalysisResult }>();
+
+function loadKey(): string {
+  try { return sessionStorage.getItem(KEY_STORAGE) ?? localStorage.getItem(KEY_STORAGE) ?? ""; } catch { return ""; }
+}
+function saveKey(key: string, remember: boolean) {
+  try {
+    sessionStorage.setItem(KEY_STORAGE, key);
+    if (remember) localStorage.setItem(KEY_STORAGE, key); else localStorage.removeItem(KEY_STORAGE);
+  } catch { /* storage unavailable */ }
+}
+function forgetKey() {
+  try { sessionStorage.removeItem(KEY_STORAGE); localStorage.removeItem(KEY_STORAGE); } catch { /* ignore */ }
+  $<HTMLInputElement>("api-key").value = "";
+}
+
+/** Minimal Markdown → HTML for assistant replies (headings, lists, emphasis, code). */
+function mdToHtml(md: string): string {
+  const lines = md.replace(/\r/g, "").split("\n");
+  const out: string[] = [];
+  let list: "ul" | "ol" | null = null;
+  let para: string[] = [];
+  let code: string[] | null = null;
+  const inline = (t: string) => esc(t)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+  const flushPara = () => { if (para.length) { out.push(`<p>${inline(para.join(" "))}</p>`); para = []; } };
+  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  for (const raw of lines) {
+    if (code) {
+      if (/^```/.test(raw)) { out.push(`<pre class="code"><code>${esc(code.join("\n"))}</code></pre>`); code = null; }
+      else code.push(raw);
+      continue;
+    }
+    if (/^```/.test(raw)) { flushPara(); closeList(); code = []; continue; }
+    const h = /^(#{1,3})\s+(.*)$/.exec(raw);
+    if (h) { flushPara(); closeList(); out.push(`<h${h[1].length + 2}>${inline(h[2])}</h${h[1].length + 2}>`); continue; }
+    const li = /^\s*(?:[-*•]|\d+[.)])\s+(.*)$/.exec(raw);
+    if (li) {
+      flushPara();
+      const kind = /^\s*\d/.test(raw) ? "ol" : "ul";
+      if (list !== kind) { closeList(); out.push(`<${kind}>`); list = kind; }
+      out.push(`<li>${inline(li[1])}</li>`);
+      continue;
+    }
+    if (raw.trim() === "") { flushPara(); closeList(); continue; }
+    para.push(raw.trim());
+  }
+  flushPara(); closeList();
+  if (code) out.push(`<pre class="code"><code>${esc(code.join("\n"))}</code></pre>`);
+  return out.join("");
+}
+
+function evalStatus(text: string) { $("eval-status").textContent = text; }
+
+function appendTranscript(html: string, cls = ""): HTMLElement {
+  const el = document.createElement("div");
+  el.className = `msg ${cls}`;
+  el.innerHTML = html;
+  $("eval-transcript").appendChild(el);
+  el.scrollIntoView({ block: "nearest" });
+  return el;
+}
+
+function currentDigest(label = "current model"): Digest | null {
+  if (!lastResult) return null;
+  return buildDigest(lastResult, dataColumns, label);
+}
+
+async function evaluatorModule() {
+  return import("./evaluator");
+}
+
+function showDigestPreview() {
+  const d = currentDigest();
+  if (!d) return;
+  const pre = $("eval-digest");
+  evaluatorModule().then((m) => {
+    pre.textContent = `SYSTEM PROMPT\n${m.SYSTEM_PROMPT}\n\nOPENING MESSAGE\n${m.openingMessage(d)}`;
+    pre.classList.toggle("hidden");
+  });
+}
+
+/** Execute a run_model request from the assistant on the user's data, locally. */
+async function runModelForAssistant(input: RunModelInput, card: HTMLElement): Promise<Digest> {
+  const base = lastOptions ?? readOptions();
+  const options: AnalysisOptions = {
+    ...base,
+    bootstrap: { ...base.bootstrap, enabled: input.bootstrap, nboot: Math.min(base.bootstrap.nboot, 1000) },
+    predict: { ...base.predict, enabled: input.predict, cvpat: input.predict, cvpatNboot: Math.min(base.predict.cvpatNboot, 500) },
+    congruence: { ...base.congruence, enabled: false },
+  };
+  const result = await analyzeInWorker({ code: input.code, dataText: val("data"), dataName, options }, (stage) => {
+    card.querySelector(".tool-stage")!.textContent = stage + "…";
+  });
+  const digest = buildDigest(result, dataColumns, input.label);
+  if (!digestLooksSafe(digest)) throw new Error("Digest safety check failed; nothing was sent.");
+  alternativeRuns.set(input.label, { input, result });
+  return digest;
+}
+
+async function evaluatorTurn(userText: string, opening: boolean) {
+  const key = $<HTMLInputElement>("api-key").value.trim();
+  if (!key) { evalStatus("Enter your Anthropic API key first."); return; }
+  if (!lastResult) { evalStatus("Run an analysis first."); return; }
+  if (evalBusy) return;
+  saveKey(key, $<HTMLInputElement>("remember-key").checked);
+
+  const m = await evaluatorModule();
+  if (!evalSession || opening) {
+    const digest = currentDigest();
+    if (!digest || !digestLooksSafe(digest)) { evalStatus("Digest safety check failed; nothing was sent."); return; }
+    evalSession = { messages: [], digest };
+    $("eval-transcript").innerHTML = "";
+    evalUsage.input = evalUsage.output = evalUsage.cacheRead = evalUsage.cacheWrite = 0;
+  }
+  const content = opening ? m.openingMessage(evalSession.digest, userText || undefined) : userText;
+  appendTranscript(`<div class="who">You</div><p>${esc(opening ? (userText ? userText : "Evaluate this model and test the improvements you would recommend.") : userText)}</p>${opening ? '<p class="note">Sent with the aggregate digest shown under “What leaves the browser”.</p>' : ""}`, "user");
+
+  // Test hook: a mock endpoint set by the headless harness. Never set in normal use.
+  let testBase: string | undefined;
+  try { testBase = localStorage.getItem("seminr-anthropic-base-url") ?? undefined; } catch { /* ignore */ }
+  const client = m.createClient(key, testBase);
+  evalBusy = true;
+  evalAbort = new AbortController();
+  $("eval-stop").classList.remove("hidden");
+  $<HTMLButtonElement>("eval-send").disabled = true;
+  $<HTMLButtonElement>("eval-start").disabled = true;
+  evalStatus("Claude is reading the results…");
+
+  let bubble: HTMLElement | null = null;
+  let text = "";
+  const flush = () => { if (bubble) bubble.querySelector(".body")!.innerHTML = mdToHtml(text); };
+  try {
+    await m.runTurn(client, evalSession, content, (input) => {
+      const card = appendTranscript(`<div class="who">Ran on your data</div><div class="tool-head"><strong>${esc(input.label)}</strong> <span class="tool-stage note">starting…</span></div><details><summary>SEMinR code</summary><pre class="code"><code>${esc(input.code)}</code></pre></details><div class="tool-actions"></div>`, "tool");
+      return runModelForAssistant(input, card).then((d) => {
+        card.querySelector(".tool-stage")!.textContent = "done";
+        const actions = card.querySelector(".tool-actions")!;
+        const btn = document.createElement("button");
+        btn.type = "button"; btn.className = "copy"; btn.textContent = "Load this model into the editor";
+        btn.addEventListener("click", () => { $<HTMLTextAreaElement>("code").value = input.code; validateCode(); $("code").scrollIntoView({ behavior: "smooth", block: "center" }); });
+        actions.appendChild(btn);
+        bubble = null; text = "";
+        return d;
+      });
+    }, {
+      onText: (delta) => {
+        if (!bubble) bubble = appendTranscript(`<div class="who">Claude</div><div class="body"></div>`, "assistant");
+        text += delta;
+        flush();
+      },
+      onToolStart: () => { evalStatus("Running an alternative model on your data…"); },
+      onToolEnd: (call) => { evalStatus(call.ok ? `Done: ${call.summary}. Claude is reading it…` : `Run failed: ${call.summary}`); },
+      onUsage: (u) => {
+        evalUsage.input += u.input; evalUsage.output += u.output; evalUsage.cacheRead += u.cacheRead; evalUsage.cacheWrite += u.cacheWrite;
+        $("eval-usage").textContent = `Tokens this session: ${(evalUsage.input + evalUsage.cacheRead + evalUsage.cacheWrite).toLocaleString()} in (${evalUsage.cacheRead.toLocaleString()} from cache), ${evalUsage.output.toLocaleString()} out.`;
+      },
+    }, evalAbort.signal);
+    evalStatus("");
+  } catch (err) {
+    evalStatus(m.describeError(err));
+  } finally {
+    evalBusy = false;
+    evalAbort = null;
+    $("eval-stop").classList.add("hidden");
+    $<HTMLButtonElement>("eval-send").disabled = false;
+    $<HTMLButtonElement>("eval-start").disabled = false;
+  }
+}
+
+function mountEvaluator() {
+  const key = loadKey();
+  if (key) { $<HTMLInputElement>("api-key").value = key; $<HTMLInputElement>("remember-key").checked = !!localStorage.getItem(KEY_STORAGE); }
+  $("eval-start").addEventListener("click", () => void evaluatorTurn(val("eval-question").trim(), true));
+  $("eval-send").addEventListener("click", () => {
+    const q = val("eval-question").trim();
+    if (!q) return;
+    $<HTMLTextAreaElement>("eval-question").value = "";
+    void evaluatorTurn(q, !evalSession);
+  });
+  $("eval-question").addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter" && ((e as KeyboardEvent).metaKey || (e as KeyboardEvent).ctrlKey)) $("eval-send").click();
+  });
+  $("eval-stop").addEventListener("click", () => evalAbort?.abort());
+  $("eval-show-digest").addEventListener("click", showDigestPreview);
+  $("eval-forget").addEventListener("click", forgetKey);
 }
 
 // ---------------------------------------------------------------------------
@@ -455,6 +675,8 @@ export function mount() {
     const svg = lastCtx.svg.boot ?? lastCtx.svg.model;
     if (svg) download(`${stem()}-model.svg`, svg, "image/svg+xml");
   });
+
+  mountEvaluator();
 
   const restored = restore();
   const demo = new URLSearchParams(location.search).get("demo");

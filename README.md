@@ -36,7 +36,15 @@ The bootstrap and the congruence test share one replication pass over an R-RNG i
 
 Parity with R is tested, not assumed: `test/seminr-parity.mjs` compares the summary tables and PLSpredict with seminr 2.6.0 output, and `test/congruence-parity.mjs` reproduces `seminrExtras::congruence_test()` bit-for-bit (the bootstrap draws come from a port of R's Mersenne-Twister and sampling routines in `src/lib/seminr/rrng.ts`). Bootstrap intervals cannot match R digit for digit because `bootstrap_model()` draws on a parallel RNG stream; the page says so.
 
-The JSON bundle (`AnalysisResult` in `src/lib/seminr/analyze.ts`, `schemaVersion: 1`) is the hand-off point for the planned model-evaluation assistant: model spec, options, every table, and the assessment flags in one self-describing object.
+### The evaluation assistant
+
+After a run, the page can ask Claude (Opus 5) to review the model and test its own suggestions. Design constraints, enforced in code:
+
+- **The data never leaves the browser.** Claude receives only the digest built by `src/lib/seminr/digest.ts`: aggregate statistics, column *names*, and the assessment flags. `digestLooksSafe()` refuses anything that looks like a numeric vector, and the page shows the exact system prompt and opening message under "What leaves the browser".
+- **Claude can run code, not read data.** Its one tool, `run_model`, hands SEMinR code back to the page; the page estimates it locally in a worker and returns another digest (`src/lib/seminr/evaluator.ts`).
+- **The user's own key, direct to Anthropic.** The official SDK is called from the browser with `dangerouslyAllowBrowser`; there is no server and no site-owned key. The key lives in `sessionStorage` (or `localStorage` when the user opts in).
+
+`test/mock-anthropic.mjs` + `test/headless-evaluator.mjs` exercise the whole loop in headless Chrome against a fake endpoint that also checks nothing row-shaped is transmitted.
 
 ## Content updates
 
