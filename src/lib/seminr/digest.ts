@@ -76,7 +76,14 @@ export interface Digest {
   warnings: string[];
 }
 
+/** Names come from a CSV header the user may not have written: bound them, strip control characters. */
+function cleanName(s: string): string {
+  return s.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 80);
+}
+
 export function buildDigest(r: AnalysisResult, availableColumns: string[], label = "current model"): Digest {
+  availableColumns = availableColumns.slice(0, 500).map(cleanName);
+  label = cleanName(label);
   const s = r.summary;
   const boot = r.bootstrap && !isStageError(r.bootstrap) ? r.bootstrap : null;
   const pr = r.predict && !isStageError(r.predict) ? r.predict : null;

@@ -96,18 +96,9 @@ const ogImageURL = new URL(ogImage, Astro.site);
       }
     </script>
 
-    <!-- Dark mode inline script (prevents FOUC) -->
-    <script is:inline>
-      (function () {
-        const stored = localStorage.getItem("theme");
-        if (
-          stored === "dark" ||
-          (!stored && window.matchMedia("(prefers-color-scheme: dark)").matches)
-        ) {
-          document.documentElement.classList.add("dark");
-        }
-      })();
-    </script>
+    <!-- Dark mode init (prevents FOUC). External and blocking on purpose: the
+         Content-Security-Policy in netlify.toml allows no inline scripts. -->
+    <script is:inline src="/theme-init.js"></script>
   </head>
   <body>
     <slot />

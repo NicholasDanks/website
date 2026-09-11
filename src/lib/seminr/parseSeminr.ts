@@ -23,6 +23,11 @@
  * being silently dropped — a model we mis-parsed would be worse than no answer.
  */
 
+/** Hard limits: the parser accepts code from the page's user and from the review assistant, never eval'd. */
+const MAX_CODE_CHARS = 100_000;
+const MAX_RANGE = 2_000;
+const MAX_ITEMS = 5_000;
+
 export type WeightMode = "mode_A" | "mode_B" | "unit_weights";
 export type InteractionMethod = "two_stage" | "product_indicator" | "orthogonal";
 
@@ -150,6 +155,7 @@ function parseVector(expr: string): string[] {
   const range = /^(\d+)\s*:\s*(\d+)$/.exec(e);
   if (range) {
     const a = Number(range[1]), b = Number(range[2]);
+    if (Math.abs(b - a) + 1 > MAX_RANGE) throw new Error(`Item range ${a}:${b} is too large (limit ${MAX_RANGE} items).`);
     const out: string[] = [];
     if (a <= b) for (let i = a; i <= b; i++) out.push(String(i));
     else for (let i = a; i >= b; i--) out.push(String(i));
@@ -292,6 +298,7 @@ function parseInteraction(fn: "interaction_term" | "quadratic_term", inner: stri
 }
 
 export function parseSeminrModel(source: string): ParsedModel {
+  if (source.length > MAX_CODE_CHARS) throw new Error(`Model code is too long (${source.length} characters; limit ${MAX_CODE_CHARS}).`);
   const src = stripComments(source);
 
   const cCall = findCall(src, "constructs");
@@ -326,6 +333,8 @@ export function parseSeminrModel(source: string): ParsedModel {
         throw new Error(`${fn}() is not supported inside constructs().`);
     }
   }
+  const totalItems = measurement.reduce((n, m) => n + (m.kind === "construct" ? m.items.length : 0), 0);
+  if (totalItems > MAX_ITEMS) throw new Error(`The model lists ${totalItems} indicators; the limit is ${MAX_ITEMS}.`);
   const constructsOut = measurement.filter((m) => m.kind !== "interaction");
   if (constructsOut.length < 2) {
     throw new Error("A model needs at least two constructs.");

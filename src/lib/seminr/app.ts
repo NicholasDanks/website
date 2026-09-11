@@ -282,10 +282,22 @@ function graphviz() {
   return graphvizPromise;
 }
 
+/**
+ * Graphviz escapes label text, and seminr's DOT carries no links, but the SVG
+ * is injected with innerHTML, so strip anything executable defensively.
+ */
+export function sanitizeSvg(svg: string): string {
+  return svg
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s(xlink:)?href\s*=\s*("javascript:[^"]*"|'javascript:[^']*')/gi, "");
+}
+
 async function renderDiagrams(result: AnalysisResult, ctx: RenderContext) {
   try {
     const gv = await graphviz();
-    const svg = { model: gv.dot(result.model.dot), boot: result.model.dotBoot ? gv.dot(result.model.dotBoot) : undefined };
+    const svg = { model: sanitizeSvg(gv.dot(result.model.dot)), boot: result.model.dotBoot ? sanitizeSvg(gv.dot(result.model.dotBoot)) : undefined };
     ctx.svg = svg;
     document.querySelectorAll<HTMLElement>("[data-diagram]").forEach((el) => {
       const which = el.dataset.diagram as "model" | "boot";

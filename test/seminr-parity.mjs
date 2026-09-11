@@ -217,6 +217,26 @@ console.log("\nBootstrap and derived stages");
     const aRow = dataText.split("\n")[5].trim();
     return digestLooksSafe(d) && !text.includes(aRow) && !text.includes("compositeScores") && text.length < 60000 && d.availableColumns.includes("qual_global") && d.paths.length === res.model.paths.length;
   })());
+  check("hostile construct names are escaped everywhere they are rendered", await (async () => {
+    const { renderSections, renderStandaloneReport } = await import("../src/lib/seminr/report.ts");
+    const { buildDigest } = await import("../src/lib/seminr/digest.ts");
+    const evil = '<img src=x onerror=alert(1)>';
+    const code = `mm <- constructs(composite("${evil}", multi_items("comp_", 1:3)), composite("LIKE", multi_items("like_", 1:3)), composite("CUSA", single_item("cusa")))\nsm <- relationships(paths(from = c("${evil}", "LIKE"), to = "CUSA"))`;
+    const r = await runAnalysis({ code, dataText, options: { ...res.input.options, bootstrap: { ...res.input.options.bootstrap, nboot: 50 }, predict: { ...res.input.options.predict, enabled: true, cvpat: false }, congruence: { ...res.input.options.congruence, enabled: true, nboot: 50 } } });
+    const html = renderSections(r, { tsv: {} }).map((s) => s.html).join("") + renderStandaloneReport(r, { tsv: {} });
+    const rendered = html.replace(/<pre class="code"><code>[\s\S]*?<\/code><\/pre>/g, ""); // code blocks are escaped separately
+    const digest = JSON.stringify(buildDigest(r, [evil, "x"]));
+    return !/<img/i.test(rendered) && rendered.includes("&lt;img") && !/<img/i.test(html.replace(/&lt;img/g, "")) && digest.includes(evil) && r.model.dot.includes("alert(1)") === true;
+  })());
+  check("parser refuses oversized code, ranges and item counts", (() => {
+    const errs = [];
+    for (const src of [
+      "x".repeat(100_001),
+      'constructs(composite("A", multi_items("a_", 1:5000)), composite("B", single_item("b")))\nrelationships(paths("A","B"))',
+      'constructs(' + Array.from({ length: 3 }, (_, k) => `composite("C${k}", multi_items("c${k}_", 1:1999))`).join(", ") + ')\nrelationships(paths("C0","C1"))',
+    ]) { try { parseSeminrModel(src); errs.push("no error"); } catch (e) { errs.push(e.message); } }
+    return /too long/.test(errs[0]) && /too large/.test(errs[1]) && /limit is 5000/.test(errs[2]);
+  })());
   check("assessment splits gates from findings",
     res.assessment.some((a) => a.kind === "gate") && res.assessment.some((a) => a.kind === "finding") && res.assessment.filter((a) => a.kind === "finding").every((a) => a.status === "info"));
 }
