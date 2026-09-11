@@ -21,8 +21,8 @@ import { assessCvpat, version as extrasVersion } from "@seminr/extras";
 import { parseSeminrModel, requiredItems, type ParsedModel } from "./parseSeminr";
 import { parseDataText, selectColumns, missingCounts } from "./data";
 import { estimateParsedModel, type EstimationOptions } from "./specify";
-import { bootstrapInChunks } from "./bootstrap";
-import { congruenceFromModel, type Diagonal, type ModelCongruenceResult } from "./congruence";
+import { bootstrapShared } from "./bootstrap";
+import { congruenceSpec, congruenceFromReplications, type Diagonal, type ModelCongruenceResult } from "./congruence";
 import { RRNG } from "./rrng";
 import { assessAnalysis, type AssessmentItem } from "./assess";
 import { generateRScript } from "./rcode";
@@ -351,13 +351,17 @@ function q2Predict(residuals: NamedMatrix, actuals: NamedMatrix): Record<string,
   return out;
 }
 
-export function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {}): AnalysisResult {
+export async function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {}): Promise<AnalysisResult> {
   const { options } = input;
   const timings: Partial<Record<StageId, number>> = {};
   const stage = (id: StageId, status: StageStatus, detail?: string) => hooks.onStage?.(id, status, detail);
   const timed = <T>(id: StageId, fn: () => T): T => {
     const t = Date.now();
     try { return fn(); } finally { timings[id] = Date.now() - t; }
+  };
+  const timedAsync = async <T>(id: StageId, fn: () => Promise<T>): Promise<T> => {
+    const t = Date.now();
+    try { return await fn(); } finally { timings[id] = Date.now() - t; }
   };
 
   // --- parse ----------------------------------------------------------------
@@ -425,22 +429,57 @@ export function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {}): An
     timingsMs: timings,
   };
 
-  // --- bootstrap ------------------------------------------------------------
+  // --- bootstrap and congruence: one replication pass ----------------------
+  // The congruence test bootstraps by re-estimating the model on resampled
+  // rows — the same work as the bootstrap — so when both are requested with
+  // one seed they share a single pass over one R-RNG stream. This is exact:
+  // the leading resamples of the stream are what a standalone congruence run
+  // would draw.
+  const spec = { parsed, data, estimation: options.estimation };
+  const wantBoot = options.bootstrap.enabled;
+  const wantCong = options.congruence.enabled;
+  const fused = wantBoot && wantCong && options.bootstrap.seed === options.congruence.seed;
   let boot: BootModel | null = null;
-  if (options.bootstrap.enabled) {
+  let congSpec: ReturnType<typeof congruenceSpec> | null = null;
+  if (wantCong) {
+    try { congSpec = congruenceSpec(model, options.congruence.diagonal); }
+    catch (err) { result.congruence = { error: err instanceof Error ? err.message : String(err) }; }
+  }
+  const finishCongruence = (reps: (number[] | null)[]) => {
+    if (!congSpec) return;
+    result.congruence = congruenceFromReplications(model, congSpec, reps, {
+      alpha: options.congruence.alpha,
+      threshold: options.congruence.threshold,
+    });
+  };
+
+  if (wantBoot) {
     stage("bootstrap", "start");
+    if (fused && congSpec) stage("congruence", "start", "sharing the bootstrap resamples");
     try {
-      boot = timed("bootstrap", () =>
-        bootstrapInChunks(model, {
+      const shared = await timedAsync("bootstrap", () =>
+        bootstrapShared(model, spec, {
           nboot: options.bootstrap.nboot,
           seed: options.bootstrap.seed,
+          congruence: fused && congSpec ? { spec: congSpec, count: options.congruence.nboot } : undefined,
           onProgress: (done, total) => hooks.onProgress?.("bootstrap", done / total),
         }),
       );
+      boot = shared.boot;
+      if (!boot) throw new Error("The bootstrap produced no replications.");
       const bs = summarizePlsBoot(boot, options.bootstrap.alpha);
       result.bootstrap = { ...bs, seed: options.bootstrap.seed, alpha: options.bootstrap.alpha, fails: boot.fails };
       result.model.dotBoot = dotGraph(boot, { title: "", alpha: options.bootstrap.alpha });
       stage("bootstrap", "done", `${boot.boots} resamples${boot.fails ? `, ${boot.fails} failed` : ""}`);
+      if (fused && congSpec) {
+        try {
+          finishCongruence(shared.congruence);
+          stage("congruence", "done", `${congSpec.pairs.length} pairs, from the bootstrap resamples`);
+        } catch (err) {
+          result.congruence = { error: err instanceof Error ? err.message : String(err) };
+          stage("congruence", "failed", result.congruence.error);
+        }
+      }
 
       // mediation over every chain the structural model contains
       try {
@@ -454,7 +493,7 @@ export function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {}): An
           const directP = i >= 0 ? bp.values[i][bp.cols.indexOf("Bootstrap P Val")] : NaN;
           return { ...e, directEst, directP, type: classifyMediation(directEst, directP, e.originalEst, e.bootstrapP, options.bootstrap.alpha) };
         });
-        const pairs = [...new Set(chains.map((c) => `${c.from} ${c.to}`))].map((k) => k.split(" "));
+        const pairs = [...new Set(chains.map((c) => `${c.from} ${c.to}`))].map((k) => k.split(" "));
         const totalIndirect = pairs.map(([from, to]) => {
           const ci = totalIndirectCi(boot!, { from, to, alpha: options.bootstrap.alpha });
           const estimate = (() => {
@@ -471,6 +510,7 @@ export function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {}): An
     } catch (err) {
       result.bootstrap = { error: err instanceof Error ? err.message : String(err) };
       stage("bootstrap", "failed", result.bootstrap.error);
+      if (fused) stage("congruence", "failed", result.bootstrap.error);
     }
   } else {
     stage("bootstrap", "skipped");
@@ -567,26 +607,25 @@ export function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {}): An
     stage("cvpat", "skipped");
   }
 
-  // --- congruence -----------------------------------------------------------
-  if (options.congruence.enabled) {
+  // --- congruence on its own stream (bootstrap off, or a different seed) ----
+  if (wantCong && !fused && congSpec) {
     stage("congruence", "start");
     try {
-      result.congruence = timed("congruence", () =>
-        congruenceFromModel(model, model.rawdata, {
-          nboot: options.congruence.nboot,
+      const shared = await timedAsync("congruence", () =>
+        bootstrapShared(model, spec, {
+          nboot: 0,
           seed: options.congruence.seed,
-          alpha: options.congruence.alpha,
-          threshold: options.congruence.threshold,
-          diagonal: options.congruence.diagonal,
-          onProgress: (f) => hooks.onProgress?.("congruence", f),
+          congruence: { spec: congSpec!, count: options.congruence.nboot },
+          onProgress: (done, total) => hooks.onProgress?.("congruence", done / total),
         }),
       );
-      stage("congruence", "done", `${result.congruence.rows.length} pairs`);
+      finishCongruence(shared.congruence);
+      stage("congruence", "done", `${congSpec.pairs.length} pairs`);
     } catch (err) {
       result.congruence = { error: err instanceof Error ? err.message : String(err) };
       stage("congruence", "failed", result.congruence.error);
     }
-  } else {
+  } else if (!wantCong) {
     stage("congruence", "skipped");
   }
 

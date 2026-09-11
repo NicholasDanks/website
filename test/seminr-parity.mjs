@@ -126,7 +126,7 @@ sm <- relationships(
   paths(from = c("COMP","LIKE"), to = c("CUSA","CUSL")),
   paths(from = "CUSA", to = "CUSL"))`;
 
-const res = runAnalysis({
+const res = await runAnalysis({
   code: CODE, dataText, dataName: "corp_rep_data.csv",
   options: {
     estimation: { innerWeights: "path_weighting", missing: "mean_replacement", missingValue: -99 },
@@ -158,9 +158,34 @@ console.log("\nBootstrap and derived stages");
   check("bootstrap summary present", b && b.nboot === 60, String(b?.nboot));
   check("bootstrapped paths cover every structural path",
     b.bootstrappedPaths.rows.length === res.model.paths.length, `${b.bootstrappedPaths.rows.length} vs ${res.model.paths.length}`);
-  check("chunked bootstrap is reproducible for a seed", (() => {
-    const again = runAnalysis({ code: CODE, dataText, options: { ...res.input.options, predict: { ...res.input.options.predict, enabled: false } } });
+  check("bootstrap is reproducible for a seed", await (async () => {
+    const again = await runAnalysis({ code: CODE, dataText, options: { ...res.input.options, predict: { ...res.input.options.predict, enabled: false } } });
     return JSON.stringify(again.bootstrap.bootstrappedPaths) === JSON.stringify(b.bootstrappedPaths);
+  })());
+  check("shared-pass bootstrap equals @seminr/core's bootstrapModel on the same resamples", await (async () => {
+    const { bootstrapModel, summarizePlsBoot } = await import("@seminr/core");
+    const { parseSeminrModel: parse } = await import("../src/lib/seminr/parseSeminr.ts");
+    const { parseDataText: pd, selectColumns } = await import("../src/lib/seminr/data.ts");
+    const { estimateParsedModel } = await import("../src/lib/seminr/specify.ts");
+    const { rResampleIndices } = await import("../src/lib/seminr/bootstrap.ts");
+    const parsed = parse(CODE);
+    const data = selectColumns(pd(dataText).data, parsed.measurement.flatMap((m) => m.items ?? []));
+    const model = estimateParsedModel(parsed, data, res.input.options.estimation);
+    const idx = rResampleIndices(model.rawdata.values.length, 60, 123);
+    const ref = summarizePlsBoot(bootstrapModel({ model, nboot: 60, indices: idx }), 0.05);
+    return JSON.stringify(ref.bootstrappedPaths) === JSON.stringify(b.bootstrappedPaths) && JSON.stringify(ref.bootstrappedHtmt) === JSON.stringify(b.bootstrappedHtmt);
+  })());
+  check("congruence from the shared pass equals the standalone congruence test", await (async () => {
+    const { congruenceFromModel } = await import("../src/lib/seminr/congruence.ts");
+    const { parseSeminrModel: parse } = await import("../src/lib/seminr/parseSeminr.ts");
+    const { parseDataText: pd, selectColumns } = await import("../src/lib/seminr/data.ts");
+    const { estimateParsedModel } = await import("../src/lib/seminr/specify.ts");
+    const parsed = parse(CODE);
+    const data = selectColumns(pd(dataText).data, parsed.measurement.flatMap((m) => m.items ?? []));
+    const model = estimateParsedModel(parsed, data, res.input.options.estimation);
+    const fusedRun = await runAnalysis({ code: CODE, dataText, options: { ...res.input.options, predict: { ...res.input.options.predict, enabled: false }, congruence: { enabled: true, nboot: 40, seed: 123, alpha: 0.1, threshold: 1, diagonal: "rhoC" } } });
+    const standalone = congruenceFromModel(model, model.rawdata, { nboot: 40, seed: 123, alpha: 0.1, threshold: 1, diagonal: "rhoC" });
+    return JSON.stringify(fusedRun.congruence.rows) === JSON.stringify(standalone.rows) && fusedRun.timingsMs.congruence === undefined;
   })());
   check("mediation chains enumerated", res.mediation.specific.length > 0 && res.mediation.totalIndirect.length === 10, String(res.mediation.specific.length));
   check("assessment produced", res.assessment.length > 50 && res.assessment.every((a) => a.source));

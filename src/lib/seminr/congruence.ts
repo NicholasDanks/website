@@ -1,9 +1,13 @@
 /**
- * The congruence test, over an estimated PLS model.
+ * The congruence test (Franke, Sarstedt & Danks, 2021) over an estimated PLS
+ * model.
  *
  * The bootstrap re-estimates the whole model on every resample, exactly as
  * seminrExtras::congruence_test() does — rather than resampling construct-score
  * rows with the measurement weights frozen, which is only an approximation.
+ * The per-resample statistic lives in `congruenceStatistic`, so the app can
+ * compute it inside the same replication pass as the ordinary bootstrap
+ * (see replicate.ts) instead of re-estimating the model a second time.
  *
  * The reliability placed on the matrix diagonal is a choice:
  *   - "rhoA" (the shipped default) is the reliability appropriate to composite
@@ -57,6 +61,20 @@ export interface ModelCongruenceOptions {
   threshold?: number;
   diagonal?: Diagonal;
   onProgress?: (fraction: number) => void;
+}
+
+export interface ModelCongruenceResult extends CongruenceResult {
+  diagonal: Diagonal;
+  reliabilities: Record<string, number>;
+  /** HTMT-based congruence point estimates, when computable. */
+  htmtRows?: { pair: string; estimate: number }[];
+}
+
+/** Which constructs and pairs the statistic covers, and the diagonal in use. Plain data. */
+export interface CongruenceSpec {
+  names: string[];
+  pairs: [number, number][];
+  diagonal: Diagonal;
 }
 
 /** Pull a NamedMatrix row/col by name, tolerating the {rows, cols, values} shape. */
@@ -163,73 +181,49 @@ function quantile7(sorted: Float64Array, p: number): number {
   return sorted[lo] + (h - lo) * (sorted[hi] - sorted[lo]);
 }
 
-export interface ModelCongruenceResult extends CongruenceResult {
-  diagonal: Diagonal;
-  reliabilities: Record<string, number>;
-  /** HTMT-based congruence point estimates, when computable. */
-  htmtRows?: { pair: string; estimate: number }[];
+/** The constructs a congruence test covers: every score column except interaction terms. */
+export function congruenceSpec(model: PlsModel, diagonal: Diagonal): CongruenceSpec {
+  const cs: any = (model as any).constructScores;
+  const names: string[] = cs.cols.filter((c: string) => !c.includes("*"));
+  if (names.length < 2) throw new Error("Need at least two constructs to test congruence.");
+  const pairs: [number, number][] = [];
+  for (let a = 0; a < names.length; a++) for (let b = a + 1; b < names.length; b++) pairs.push([a, b]);
+  return { names, pairs, diagonal };
+}
+
+/** Congruence coefficient of every pair for one fitted model, in `spec.pairs` order. */
+export function congruenceStatistic(model: PlsModel, spec: CongruenceSpec): Float64Array {
+  const diag = reliabilities(model, spec.names, spec.diagonal);
+  const mat = corWithDiagonal(scoreColumns(model, spec.names), diag);
+  const out = new Float64Array(spec.pairs.length);
+  spec.pairs.forEach(([a, b], r) => (out[r] = cosine(mat, a, b)));
+  return out;
+}
+
+export interface CongruenceFromReplicationsOptions {
+  alpha?: number;
+  threshold?: number;
 }
 
 /**
- * Congruence test over an estimated PLS model, bootstrapping by re-estimating
- * the model on each resample of the raw indicator data.
+ * The congruence test table from the model's own statistic and the
+ * per-replication statistics of the bootstrap (null entries = failed resamples).
  */
-export function congruenceFromModel(
+export function congruenceFromReplications(
   model: PlsModel,
-  data: Dataset,
-  options: ModelCongruenceOptions = {},
+  spec: CongruenceSpec,
+  replications: readonly (ArrayLike<number> | null)[],
+  options: CongruenceFromReplicationsOptions = {},
 ): ModelCongruenceResult {
-  const {
-    nboot = 2000,
-    seed = 123,
-    alpha = 0.05,
-    threshold = 1,
-    diagonal = "rhoA",
-    onProgress,
-  } = options;
-
-  const cs: any = (model as any).constructScores;
-  // Interaction constructs are not congruence-testable; keep the plain ones.
-  const names: string[] = cs.cols.filter((c: string) => !c.includes("*"));
-  const k = names.length;
-  if (k < 2) throw new Error("Need at least two constructs to test congruence.");
-
-  const pairs: [number, number][] = [];
-  for (let a = 0; a < k; a++) for (let b = a + 1; b < k; b++) pairs.push([a, b]);
-
-  const diag = reliabilities(model, names, diagonal);
-  const base = corWithDiagonal(scoreColumns(model, names), diag);
-  const orig = pairs.map(([a, b]) => cosine(base, a, b));
-
-  // --- bootstrap: re-estimate the model on each resample --------------------
-  const rows = data.values;
-  const n = rows.length;
-  const rng = new RRNG(seed);
-  const boot: Float64Array[] = pairs.map(() => new Float64Array(nboot));
-  let converged = 0;
-
-  for (let b = 0; b < nboot; b++) {
-    const idx = rng.sampleIntReplace(n, n);
-    const resampled: number[][] = new Array(n);
-    for (let i = 0; i < n; i++) resampled[i] = rows[idx[i]];
-    const boots: Dataset = { columns: data.columns, values: resampled };
-    let m2: PlsModel;
-    try {
-      m2 = rerun(model, { data: boots });
-    } catch {
-      for (let r = 0; r < pairs.length; r++) boot[r][b] = NaN;
-      continue;
-    }
-    const d2 = reliabilities(m2, names, diagonal);
-    const mat = corWithDiagonal(scoreColumns(m2, names), d2);
-    for (let r = 0; r < pairs.length; r++) boot[r][b] = cosine(mat, pairs[r][0], pairs[r][1]);
-    converged++;
-    if (onProgress && (b & 15) === 0) onProgress(b / nboot);
-  }
+  const { alpha = 0.05, threshold = 1 } = options;
+  const { names, pairs } = spec;
+  const orig = congruenceStatistic(model, spec);
+  const diag = reliabilities(model, names, spec.diagonal);
+  const kept = replications.filter((r): r is ArrayLike<number> => r !== null);
 
   const EPS = 2.220446049250313e-16;
-  const outRows: CongruenceRow[] = pairs.map(([a, b], r) => {
-    const clean = Float64Array.from([...boot[r]].filter((v) => Number.isFinite(v)));
+  const rows: CongruenceRow[] = pairs.map(([a, b], r) => {
+    const clean = Float64Array.from(kept.map((rep) => rep[r]).filter((v) => Number.isFinite(v)));
     const sd = rSd(clean);
     const diff = threshold - Math.abs(orig[r]);
     const sorted = Float64Array.from(clean).sort();
@@ -250,6 +244,7 @@ export function congruenceFromModel(
   let htmtRows: { pair: string; estimate: number }[] | undefined;
   try {
     const h: any = htmtOf(model);
+    const k = names.length;
     const hm: Float64Array[] = [];
     for (let a = 0; a < k; a++) hm.push(new Float64Array(k));
     let usable = true;
@@ -280,22 +275,52 @@ export function congruenceFromModel(
     htmtRows = undefined;
   }
 
-  onProgress?.(1);
-
   const rel: Record<string, number> = {};
   names.forEach((nm, i) => (rel[nm] = diag[i]));
 
   return {
-    rows: outRows,
+    rows,
     alpha,
     threshold,
-    nboot: converged,
+    nboot: kept.length,
     loLabel: `${(alpha / 2) * 100}% CI`,
     hiLabel: `${(1 - alpha / 2) * 100}% CI`,
     inference: true,
-    diagonal,
+    diagonal: spec.diagonal,
     reliabilities: rel,
     htmtRows,
   };
 }
 
+/**
+ * Standalone congruence test: bootstrap by re-estimating the model on each
+ * resample of the raw indicator data, sequentially in this thread. The app
+ * normally obtains the same numbers from the shared replication pass; this
+ * entry point is what the R-parity test exercises.
+ */
+export function congruenceFromModel(
+  model: PlsModel,
+  data: Dataset,
+  options: ModelCongruenceOptions = {},
+): ModelCongruenceResult {
+  const { nboot = 2000, seed = 123, alpha = 0.05, threshold = 1, diagonal = "rhoA", onProgress } = options;
+  const spec = congruenceSpec(model, diagonal);
+  const rows = data.values;
+  const n = rows.length;
+  const rng = new RRNG(seed);
+  const replications: (Float64Array | null)[] = new Array(nboot);
+  for (let b = 0; b < nboot; b++) {
+    const idx = rng.sampleIntReplace(n, n);
+    const resampled: number[][] = new Array(n);
+    for (let i = 0; i < n; i++) resampled[i] = rows[idx[i]];
+    try {
+      const m2 = rerun(model, { data: { columns: data.columns, values: resampled } });
+      replications[b] = congruenceStatistic(m2, spec);
+    } catch {
+      replications[b] = null;
+    }
+    if (onProgress && (b & 15) === 0) onProgress(b / nboot);
+  }
+  onProgress?.(1);
+  return congruenceFromReplications(model, spec, replications, { alpha, threshold });
+}

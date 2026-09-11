@@ -19,9 +19,9 @@ export type WorkerMessage =
 
 const post = (m: WorkerMessage) => (self as unknown as Worker).postMessage(m);
 
-self.onmessage = (e: MessageEvent<WorkerRequest>) => {
+self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   try {
-    const result = runAnalysis(e.data, {
+    const result = await runAnalysis(e.data, {
       onStage: (stage, status, detail) => post({ type: "stage", stage, status, detail }),
       onProgress: (stage, fraction) => post({ type: "progress", stage, fraction }),
     });

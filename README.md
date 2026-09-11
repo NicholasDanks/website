@@ -32,6 +32,8 @@ npm test           # R-parity test suite (RNG, congruence test, full seminr pipe
 
 Estimates a PLS-SEM model from pasted SEMinR code and indicator data entirely in the browser (a Web Worker; nothing is uploaded), then bootstraps it, runs PLSpredict, CVPAT and the bootstrapped congruence test, assesses every result against the *PLS-SEM Using R* thresholds, draws the path diagram with wasm Graphviz, and offers a standalone HTML report, a JSON bundle of all results, and an R script that reproduces the run.
 
+The bootstrap and the congruence test share one replication pass over an R-RNG index stream, split across a pool of nested Web Workers (`src/lib/seminr/bootstrap.ts`, `bootWorker.ts`); a full default run of the textbook model takes about five seconds on a 12-core laptop. `test/headless-run.mjs` times a run in headless Chrome over the DevTools protocol.
+
 Parity with R is tested, not assumed: `test/seminr-parity.mjs` compares the summary tables and PLSpredict with seminr 2.6.0 output, and `test/congruence-parity.mjs` reproduces `seminrExtras::congruence_test()` bit-for-bit (the bootstrap draws come from a port of R's Mersenne-Twister and sampling routines in `src/lib/seminr/rrng.ts`). Bootstrap intervals cannot match R digit for digit because `bootstrap_model()` draws on a parallel RNG stream; the page says so.
 
 The JSON bundle (`AnalysisResult` in `src/lib/seminr/analyze.ts`, `schemaVersion: 1`) is the hand-off point for the planned model-evaluation assistant: model spec, options, every table, and the assessment flags in one self-describing object.
