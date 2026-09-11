@@ -10,6 +10,7 @@ import type { WorkerMessage, WorkerRequest } from "./worker";
 import { parseSeminrModel, requiredItems, type ParsedModel } from "./parseSeminr";
 import { renderSections, renderStandaloneReport, REPORT_CSS, esc, type RenderContext } from "./report";
 import { buildDigest, digestLooksSafe, type Digest } from "./digest";
+import { sanitizeSvg } from "./sanitize";
 import type { EvaluatorSession, RunModelInput } from "./evaluator";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -282,17 +283,6 @@ function graphviz() {
   return graphvizPromise;
 }
 
-/**
- * Graphviz escapes label text, and seminr's DOT carries no links, but the SVG
- * is injected with innerHTML, so strip anything executable defensively.
- */
-export function sanitizeSvg(svg: string): string {
-  return svg
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, "")
-    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-    .replace(/\s(xlink:)?href\s*=\s*("javascript:[^"]*"|'javascript:[^']*')/gi, "");
-}
 
 async function renderDiagrams(result: AnalysisResult, ctx: RenderContext) {
   try {

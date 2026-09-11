@@ -228,6 +228,15 @@ console.log("\nBootstrap and derived stages");
     const digest = JSON.stringify(buildDigest(r, [evil, "x"]));
     return !/<img/i.test(rendered) && rendered.includes("&lt;img") && !/<img/i.test(html.replace(/&lt;img/g, "")) && digest.includes(evil) && r.model.dot.includes("alert(1)") === true;
   })());
+  check("hostile names in an interaction model leave no executable content in the slope SVG", await (async () => {
+    const { sanitizeSvg } = await import("../src/lib/seminr/sanitize.ts");
+    const evil = '<img src=x onerror=alert(1)>';
+    const code = `mm <- constructs(composite("${evil}", multi_items("comp_", 1:3)), composite("SC", multi_items("switch_", 1:4)), composite("CUSL", multi_items("cusl_", 1:3)), interaction_term(iv = "${evil}", moderator = "SC", method = two_stage))\nsm <- relationships(paths(from = c("${evil}", "SC", "${evil}*SC"), to = "CUSL"))`;
+    const r = await runAnalysis({ code, dataText, options: { ...res.input.options, bootstrap: { ...res.input.options.bootstrap, enabled: false }, predict: { ...res.input.options.predict, enabled: false }, congruence: { ...res.input.options.congruence, enabled: false } } });
+    const svg = r.slopes[0]?.svg ?? "";
+    const probe = sanitizeSvg('<svg><script>alert(1)</script><a xlink:href="javascript:alert(1)" onclick="x()">t</a><foreignObject><img onerror=alert(1)></foreignObject></svg>');
+    return r.slopes.length === 1 && !/<img|<script|onerror/i.test(svg) && svg.includes("&lt;img") && !/script|javascript:|onclick|onerror|foreignObject/i.test(probe);
+  })());
   check("parser refuses oversized code, ranges and item counts", (() => {
     const errs = [];
     for (const src of [

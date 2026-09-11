@@ -31,6 +31,7 @@ import { congruenceSpec, congruenceFromReplications, type Diagonal, type ModelCo
 import { RRNG } from "./rrng";
 import { assessAnalysis, type AssessmentItem } from "./assess";
 import { generateRScript } from "./rcode";
+import { sanitizeSvg } from "./sanitize";
 
 export const APP_VERSION = "1.0.0";
 export const SCHEMA_VERSION = 1;
@@ -654,7 +655,7 @@ export async function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {
     if (m.kind !== "interaction" || m.quadratic) continue;
     for (const p of pathRows) {
       if (p.from !== m.name) continue;
-      try { slopes.push({ interaction: m.name, iv: m.iv, moderator: m.moderator, dv: p.to, svg: String(slopeAnalysis(model, p.to, m.moderator, m.iv)) }); } catch { /* skip */ }
+      try { slopes.push({ interaction: m.name, iv: m.iv, moderator: m.moderator, dv: p.to, svg: sanitizeSvg(String(slopeAnalysis(model, p.to, m.moderator, m.iv))) }); } catch { /* skip */ }
     }
   }
 
