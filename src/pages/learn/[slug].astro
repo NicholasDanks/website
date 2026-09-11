@@ -34,6 +34,9 @@ const companionUrl = companionAnchor
   ? `/learn/pls-sem-r-companion.html#${companionAnchor}`
   : null;
 
+// The in-browser app ships the textbook models this lesson uses.
+const appDemo = chapter === 7 ? "moderation" : [4, 5, 6, 8].includes(chapter) ? "corp-rep" : null;
+
 const youtubeEmbed = (() => {
   if (!videoUrl) return null;
   const match = videoUrl.match(/(?:youtu\.be\/|v=)([A-Za-z0-9_-]{6,})/);
@@ -164,6 +167,11 @@ const codeUrl = codeFile
         {codeUrl && (
           <Button href={codeUrl} variant="secondary" external>
             Get the R code
+          </Button>
+        )}
+        {appDemo && (
+          <Button href={`/seminr/?demo=${appDemo}`} variant="secondary">
+            Run this model in your browser
           </Button>
         )}
         {slidesFile && (

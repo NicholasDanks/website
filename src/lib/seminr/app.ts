@@ -1,12 +1,13 @@
 /**
- * Client-side wiring for the /seminr/ page: gather inputs, run the analysis
- * in a worker, render the results, draw the path diagrams with wasm Graphviz,
- * and offer downloads. No network requests are made except for the demo
- * dataset, and only when the user asks for it.
+ * Client-side wiring for the /seminr/ page: validate inputs as they are
+ * typed, run the analysis in a worker, render the results, draw the path
+ * diagrams with wasm Graphviz, and offer downloads. No network requests are
+ * made except for the demo dataset, and only when the user asks for it.
  */
 
 import type { AnalysisResult, AnalysisOptions, StageId, StageStatus } from "./analyze";
 import type { WorkerMessage, WorkerRequest } from "./worker";
+import { parseSeminrModel, requiredItems, type ParsedModel } from "./parseSeminr";
 import { renderSections, renderStandaloneReport, REPORT_CSS, esc, type RenderContext } from "./report";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -24,17 +25,70 @@ const STAGES: { id: StageId; label: string }[] = [
   { id: "assess", label: "Assess against thresholds" },
 ];
 
+const STORAGE_KEY = "seminr-app-v1";
+
 let worker: Worker | null = null;
 let lastResult: AnalysisResult | null = null;
 let lastCtx: RenderContext | null = null;
 let dataName = "pasted data";
+let parsedModel: ParsedModel | null = null;
+let dataColumns: string[] = [];
+
+// ---------------------------------------------------------------------------
+// demos
+// ---------------------------------------------------------------------------
+
+interface Demo { file: string; dataName: string; code: string; codeNote: string; missingValue: string }
+
+const DEMOS: Record<string, Demo> = {
+  "corp-rep": {
+    file: "/seminr-demo/corp_rep_data.csv",
+    dataName: "corp_rep_data.csv",
+    missingValue: "-99",
+    codeNote: "Demo: the corporate reputation model of PLS-SEM Using R (Ch. 5–6), with four formative drivers of competence and likeability.",
+    code: `# Corporate reputation model (Hair et al., PLS-SEM Using R, Ch. 5-6)
+corp_rep_mm <- constructs(
+  composite("QUAL", multi_items("qual_", 1:8), weights = mode_B),
+  composite("PERF", multi_items("perf_", 1:5), weights = mode_B),
+  composite("CSOR", multi_items("csor_", 1:5), weights = mode_B),
+  composite("ATTR", multi_items("attr_", 1:3), weights = mode_B),
+  composite("COMP", multi_items("comp_", 1:3)),
+  composite("LIKE", multi_items("like_", 1:3)),
+  composite("CUSA", single_item("cusa")),
+  composite("CUSL", multi_items("cusl_", 1:3)))
+
+corp_rep_sm <- relationships(
+  paths(from = c("QUAL", "PERF", "CSOR", "ATTR"), to = c("COMP", "LIKE")),
+  paths(from = c("COMP", "LIKE"),                 to = c("CUSA", "CUSL")),
+  paths(from = "CUSA",                            to = "CUSL"))`,
+  },
+  moderation: {
+    file: "/seminr-demo/corp_rep_data.csv",
+    dataName: "corp_rep_data.csv",
+    missingValue: "-99",
+    codeNote: "Demo: the moderation model of PLS-SEM Using R (Ch. 7). Switching costs (SC) moderate the effect of satisfaction on loyalty; the interaction term is built with the two-stage approach.",
+    code: `# Moderation: switching costs moderate CUSA -> CUSL (Hair et al., PLS-SEM Using R, Ch. 7)
+corp_rep_mm_mod <- constructs(
+  composite("COMP", multi_items("comp_", 1:3)),
+  composite("LIKE", multi_items("like_", 1:3)),
+  composite("CUSA", single_item("cusa")),
+  composite("SC",   multi_items("switch_", 1:4)),
+  composite("CUSL", multi_items("cusl_", 1:3)),
+  interaction_term(iv = "CUSA", moderator = "SC", method = two_stage))
+
+corp_rep_sm_mod <- relationships(
+  paths(from = c("COMP", "LIKE"),          to = c("CUSA", "CUSL")),
+  paths(from = c("CUSA", "SC", "CUSA*SC"), to = c("CUSL")))`,
+  },
+};
 
 // ---------------------------------------------------------------------------
 // options
 // ---------------------------------------------------------------------------
 
-function readOptions(): AnalysisOptions {
+function readOptions(quick = false): AnalysisOptions {
   const missingRaw = val("missing-value").trim();
+  const keyTarget = val("key-target");
   return {
     estimation: {
       innerWeights: val("inner-weights") as "path_weighting" | "path_factorial",
@@ -42,21 +96,22 @@ function readOptions(): AnalysisOptions {
       missingValue: missingRaw === "" ? undefined : Number(missingRaw),
     },
     bootstrap: {
-      enabled: checked("boot-enabled"),
+      enabled: !quick && checked("boot-enabled"),
       nboot: Math.max(50, Math.min(10000, Math.round(num("nboot", 2000)))),
       seed: Math.round(num("seed", 123)),
       alpha: Math.min(0.5, Math.max(0.001, num("alpha", 0.05))),
     },
     predict: {
-      enabled: checked("predict-enabled"),
+      enabled: !quick && checked("predict-enabled"),
       noFolds: Math.max(2, Math.round(num("folds", 10))),
       technique: val("technique") as "predict_DA" | "predict_EA",
       seed: Math.round(num("seed", 123)),
       cvpat: checked("cvpat-enabled"),
       cvpatNboot: Math.max(50, Math.min(5000, Math.round(num("cvpat-nboot", 1000)))),
+      keyTarget: keyTarget && keyTarget !== "auto" ? keyTarget : undefined,
     },
     congruence: {
-      enabled: checked("congruence-enabled"),
+      enabled: !quick && checked("congruence-enabled"),
       nboot: Math.max(50, Math.min(10000, Math.round(num("congruence-nboot", 1000)))),
       seed: Math.round(num("seed", 123)),
       alpha: Math.min(0.5, Math.max(0.001, num("alpha", 0.05))),
@@ -64,6 +119,121 @@ function readOptions(): AnalysisOptions {
       diagonal: (document.querySelector('input[name="diagonal"]:checked') as HTMLInputElement)?.value === "rhoC" ? "rhoC" : "rhoA",
     },
   };
+}
+
+/** One line describing the options in force, shown when the panel is collapsed. */
+function describeOptions() {
+  const o = readOptions();
+  const parts = [
+    o.bootstrap.enabled ? `bootstrap ${o.bootstrap.nboot} resamples, α ${o.bootstrap.alpha}` : "no bootstrap",
+    o.predict.enabled ? `PLSpredict ${o.predict.noFolds}-fold${o.predict.cvpat ? " + CVPAT" : ""}` : "no PLSpredict",
+    o.congruence.enabled ? `congruence test (${o.congruence.diagonal === "rhoA" ? "ρA" : "ρC"})` : "no congruence test",
+    `${o.estimation.missing === "na_omit" ? "drop incomplete cases" : "mean replacement"}${o.estimation.missingValue !== undefined ? ` for ${o.estimation.missingValue}` : ""}`,
+    `seed ${o.bootstrap.seed}`,
+  ];
+  $("options-summary").textContent = parts.join(" · ");
+}
+
+const OPTION_IDS = ["missing-value", "missing", "inner-weights", "seed", "boot-enabled", "nboot", "alpha", "predict-enabled", "folds", "technique", "cvpat-enabled", "cvpat-nboot", "congruence-enabled", "congruence-nboot", "congruence-threshold", "key-target"];
+
+function persist() {
+  try {
+    const opts: Record<string, string | boolean> = {};
+    for (const id of OPTION_IDS) {
+      const el = $<HTMLInputElement>(id);
+      opts[id] = el.type === "checkbox" ? el.checked : el.value;
+    }
+    opts.diagonal = (document.querySelector('input[name="diagonal"]:checked') as HTMLInputElement)?.value ?? "rhoA";
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ code: val("code"), opts }));
+  } catch { /* storage unavailable */ }
+}
+
+function restore(): boolean {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const saved = JSON.parse(raw) as { code?: string; opts?: Record<string, string | boolean> };
+    if (saved.code) $<HTMLTextAreaElement>("code").value = saved.code;
+    for (const [id, v] of Object.entries(saved.opts ?? {})) {
+      if (id === "diagonal") {
+        const radio = document.querySelector<HTMLInputElement>(`input[name="diagonal"][value="${v}"]`);
+        if (radio) radio.checked = true;
+        continue;
+      }
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (!el || id === "key-target") continue;
+      if (el.type === "checkbox") el.checked = Boolean(v);
+      else el.value = String(v);
+    }
+    return Boolean(saved.code);
+  } catch { return false; }
+}
+
+// ---------------------------------------------------------------------------
+// live validation of the inputs
+// ---------------------------------------------------------------------------
+
+function headerColumns(text: string): string[] {
+  const first = text.replace(/^﻿/, "").split(/\r?\n/).find((l) => l.trim()) ?? "";
+  const d = first.includes("\t") ? "\t" : (first.match(/;/g) ?? []).length > (first.match(/,/g) ?? []).length ? ";" : ",";
+  return first.split(d).map((c) => c.trim().replace(/^["']|["']$/g, ""));
+}
+
+function refreshKeyTarget() {
+  const select = $<HTMLSelectElement>("key-target");
+  const current = select.value;
+  const endogenous = parsedModel ? [...new Set(parsedModel.paths.flatMap((p) => p.to))] : [];
+  select.innerHTML = `<option value="auto">Automatic (final outcome)</option>` + endogenous.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+  if (endogenous.includes(current)) select.value = current;
+}
+
+function validateCode() {
+  const code = val("code");
+  const status = $("code-status");
+  if (!code.trim()) { parsedModel = null; status.textContent = ""; status.className = "text-xs mt-2 text-surface-500 dark:text-surface-400"; refreshKeyTarget(); return; }
+  try {
+    parsedModel = parseSeminrModel(code);
+    const kinds = { construct: 0, higher_composite: 0, interaction: 0 };
+    for (const m of parsedModel.measurement) kinds[m.kind]++;
+    const nPaths = parsedModel.paths.reduce((a, p) => a + p.from.length * p.to.length, 0);
+    status.textContent = `Recognised ${kinds.construct} construct${kinds.construct === 1 ? "" : "s"}${kinds.higher_composite ? `, ${kinds.higher_composite} higher-order` : ""}${kinds.interaction ? `, ${kinds.interaction} interaction term${kinds.interaction === 1 ? "" : "s"}` : ""}, ${nPaths} path${nPaths === 1 ? "" : "s"}.`;
+    status.className = "text-xs mt-2 text-emerald-700 dark:text-emerald-400";
+  } catch (err) {
+    parsedModel = null;
+    status.textContent = err instanceof Error ? err.message : String(err);
+    status.className = "text-xs mt-2 text-red-700 dark:text-red-300";
+  }
+  refreshKeyTarget();
+  validateData();
+}
+
+function validateData() {
+  const text = val("data").trim();
+  const status = $("data-status");
+  if (!text) { dataColumns = []; status.textContent = ""; status.className = "text-xs mt-2 text-surface-500 dark:text-surface-400"; return; }
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  dataColumns = headerColumns(text);
+  const d = lines[0].includes("\t") ? "tab" : (lines[0].match(/;/g) ?? []).length > (lines[0].match(/,/g) ?? []).length ? "semicolon" : "comma";
+  let msg = `${dataName}: ${lines.length - 1} rows × ${dataColumns.length} columns (${d}-separated).`;
+  let cls = "text-xs mt-2 text-surface-500 dark:text-surface-400";
+  if (parsedModel) {
+    const needed = requiredItems(parsedModel);
+    const missing = needed.filter((c) => !dataColumns.includes(c));
+    if (missing.length) {
+      msg += ` Missing ${missing.length} of the ${needed.length} indicators the model needs: ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? " …" : ""}.`;
+      cls = "text-xs mt-2 text-red-700 dark:text-red-300";
+    } else {
+      msg += ` All ${needed.length} model indicators found.`;
+      cls = "text-xs mt-2 text-emerald-700 dark:text-emerald-400";
+    }
+  }
+  status.textContent = msg;
+  status.className = cls;
+}
+
+function debounce<T extends (...a: never[]) => void>(fn: T, ms: number): T {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  return ((...a: Parameters<T>) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }) as T;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +260,8 @@ function renderStages(state: Map<StageId, { status: StageStatus; detail?: string
 
 function setBusy(busy: boolean) {
   $<HTMLButtonElement>("run").disabled = busy;
-  $("run").textContent = busy ? "Running…" : "Run the analysis";
+  $<HTMLButtonElement>("quick").disabled = busy;
+  $("run").textContent = busy ? "Running…" : "Run the full analysis";
   $("progress-wrap").classList.toggle("hidden", !busy);
   $("cancel").classList.toggle("hidden", !busy);
 }
@@ -180,14 +351,15 @@ function stem(): string {
 // run
 // ---------------------------------------------------------------------------
 
-function run() {
+function run(quick: boolean) {
   clearError();
   const code = val("code");
   const dataText = val("data");
-  if (!dataText.trim()) return showError("Paste or upload your indicator data first.");
+  if (!dataText.trim()) return showError("Paste or open your indicator data first.");
   if (!code.trim()) return showError("Paste your SEMinR model code first.");
+  persist();
 
-  const req: WorkerRequest = { code, dataText, dataName, options: readOptions() };
+  const req: WorkerRequest = { code, dataText, dataName, options: readOptions(quick) };
   const state = new Map<StageId, { status: StageStatus; detail?: string; fraction?: number }>();
   renderStages(state);
   setBusy(true);
@@ -206,7 +378,7 @@ function run() {
       if (st) { st.fraction = m.fraction; renderStages(state); }
     } else if (m.type === "done") {
       setBusy(false);
-      $("elapsed").textContent = `Finished in ${((Date.now() - started) / 1000).toFixed(1)} s.`;
+      $("elapsed").textContent = `Finished in ${((Date.now() - started) / 1000).toFixed(1)} s.${quick ? " Quick look: no bootstrap, prediction or congruence test." : ""}`;
       renderResults(m.result);
     } else {
       setBusy(false);
@@ -221,59 +393,50 @@ function run() {
 // inputs
 // ---------------------------------------------------------------------------
 
-function describeData() {
-  const text = val("data").trim();
-  const status = $("data-status");
-  if (!text) { status.textContent = ""; return; }
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  const d = lines[0].includes("\t") ? "\t" : (lines[0].match(/;/g) ?? []).length > (lines[0].match(/,/g) ?? []).length ? ";" : ",";
-  const cols = lines[0].split(d).length;
-  status.textContent = `${dataName}: ${lines.length - 1} rows × ${cols} columns (${d === "\t" ? "tab" : d === ";" ? "semicolon" : "comma"}-separated).`;
+async function loadDemo(key: string) {
+  const demo = DEMOS[key];
+  if (!demo) return;
+  clearError();
+  try {
+    const d = await fetch(demo.file).then((x) => x.text());
+    dataName = demo.dataName;
+    $<HTMLTextAreaElement>("data").value = d.trim();
+    $<HTMLTextAreaElement>("code").value = demo.code;
+    $<HTMLInputElement>("missing-value").value = demo.missingValue;
+    validateCode();
+    $("code-status").textContent = `${$("code-status").textContent} ${demo.codeNote}`;
+    describeOptions();
+  } catch {
+    showError("Could not load the demo values.");
+  }
 }
 
-const DEMO_CODE = `# Corporate reputation model (Hair et al., PLS-SEM Using R, Ch. 5-6)
-corp_rep_mm <- constructs(
-  composite("QUAL", multi_items("qual_", 1:8), weights = mode_B),
-  composite("PERF", multi_items("perf_", 1:5), weights = mode_B),
-  composite("CSOR", multi_items("csor_", 1:5), weights = mode_B),
-  composite("ATTR", multi_items("attr_", 1:3), weights = mode_B),
-  composite("COMP", multi_items("comp_", 1:3)),
-  composite("LIKE", multi_items("like_", 1:3)),
-  composite("CUSA", single_item("cusa")),
-  composite("CUSL", multi_items("cusl_", 1:3)))
-
-corp_rep_sm <- relationships(
-  paths(from = c("QUAL", "PERF", "CSOR", "ATTR"), to = c("COMP", "LIKE")),
-  paths(from = c("COMP", "LIKE"),                 to = c("CUSA", "CUSL")),
-  paths(from = "CUSA",                            to = "CUSL"))`;
-
 export function mount() {
-  $("run").addEventListener("click", run);
+  const validateCodeLive = debounce(validateCode, 250);
+  const validateDataLive = debounce(() => { dataName = "pasted data"; validateData(); }, 250);
+
+  $("run").addEventListener("click", () => run(false));
+  $("quick").addEventListener("click", () => run(true));
   $("cancel").addEventListener("click", () => { worker?.terminate(); worker = null; setBusy(false); });
-  $("data").addEventListener("input", () => { dataName = "pasted data"; describeData(); });
+  $("data").addEventListener("input", validateDataLive);
+  $("code").addEventListener("input", validateCodeLive);
 
   $<HTMLInputElement>("file").addEventListener("change", async (e) => {
     const f = (e.target as HTMLInputElement).files?.[0];
     if (!f) return;
     dataName = f.name;
     $<HTMLTextAreaElement>("data").value = (await f.text()).trim();
-    describeData();
+    validateData();
   });
 
-  $("demo").addEventListener("click", async () => {
-    clearError();
-    try {
-      const d = await fetch("/seminr-demo/corp_rep_data.csv").then((x) => x.text());
-      dataName = "corp_rep_data.csv";
-      $<HTMLTextAreaElement>("data").value = d.trim();
-      $<HTMLTextAreaElement>("code").value = DEMO_CODE;
-      $<HTMLInputElement>("missing-value").value = "-99";
-      describeData();
-      $("code-status").textContent = "Demo model: the full corporate reputation model from the textbook, with four formative drivers.";
-    } catch {
-      showError("Could not load the demo values.");
-    }
-  });
+  document.querySelectorAll<HTMLButtonElement>("[data-demo]").forEach((btn) =>
+    btn.addEventListener("click", () => void loadDemo(btn.dataset.demo!)),
+  );
+
+  for (const id of OPTION_IDS) {
+    document.getElementById(id)?.addEventListener("change", () => { describeOptions(); persist(); });
+  }
+  document.querySelectorAll('input[name="diagonal"]').forEach((el) => el.addEventListener("change", () => { describeOptions(); persist(); }));
 
   $("download-html").addEventListener("click", () => {
     if (!lastResult || !lastCtx) return;
@@ -288,7 +451,17 @@ export function mount() {
     download(`${stem()}-pls-sem.R`, lastResult.rScript, "text/plain");
   });
   $("download-svg").addEventListener("click", () => {
-    if (!lastCtx?.svg?.model) return;
-    download(`${stem()}-model.svg`, lastCtx.svg.model, "image/svg+xml");
+    if (!lastCtx?.svg) return;
+    const svg = lastCtx.svg.boot ?? lastCtx.svg.model;
+    if (svg) download(`${stem()}-model.svg`, svg, "image/svg+xml");
   });
+
+  const restored = restore();
+  const demo = new URLSearchParams(location.search).get("demo");
+  if (demo && DEMOS[demo]) {
+    void loadDemo(demo);
+  } else if (restored) {
+    validateCode();
+  }
+  describeOptions();
 }

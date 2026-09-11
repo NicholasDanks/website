@@ -32,7 +32,7 @@ const toggle = "inline-flex items-center gap-2 text-sm font-medium text-surface-
         estimates the PLS-SEM model, bootstraps it, runs PLSpredict, CVPAT and the
         congruence test, checks every result against the textbook thresholds, draws the
         path diagram, and gives you a report, the numbers, and the R script to reproduce
-        it all. No R, no install.
+        it all. No R, no install. Try the two textbook demos below, or paste your own model.
       </p>
     </header>
 
@@ -103,102 +103,122 @@ const toggle = "inline-flex items-center gap-2 text-sm font-medium text-surface-
 
     <!-- Options -->
     <section class={card + " mt-6"}>
-      <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-4">
-        <span class="text-accent-600 dark:text-accent-400">3.</span> Options
-      </h2>
+      <details id="advanced">
+        <summary class="cursor-pointer list-none flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span class="text-lg font-semibold text-surface-900 dark:text-surface-100">
+            <span class="text-accent-600 dark:text-accent-400">3.</span> Options
+          </span>
+          <span id="options-summary" class="text-xs text-surface-500 dark:text-surface-400"></span>
+          <span class="text-xs text-accent-600 dark:text-accent-400 ml-auto">change</span>
+        </summary>
 
-      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <label class={label}>Missing-value code
-          <input id="missing-value" type="text" value="-99" class={field} placeholder="e.g. -99 (blank = none)" />
-        </label>
-        <label class={label}>Missing data
-          <select id="missing" class={field}>
-            <option value="mean_replacement">Mean replacement</option>
-            <option value="na_omit">Drop incomplete cases</option>
-          </select>
-        </label>
-        <label class={label}>Inner weighting scheme
-          <select id="inner-weights" class={field}>
-            <option value="path_weighting">Path weighting</option>
-            <option value="path_factorial">Factorial</option>
-          </select>
-        </label>
-        <label class={label}>Random seed
-          <input id="seed" type="number" value="123" min="1" class={field} />
-        </label>
-      </div>
-
-      <div class="mt-6 grid md:grid-cols-3 gap-6">
-        <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-800">
-          <label class={toggle}><input id="boot-enabled" type="checkbox" checked /> Bootstrap</label>
-          <div class="mt-3 grid grid-cols-2 gap-3">
-            <label class={label}>Resamples
-              <input id="nboot" type="number" value="2000" min="50" max="10000" step="100" class={field} />
-            </label>
-            <label class={label}>Alpha
-              <input id="alpha" type="number" value="0.05" min="0.001" max="0.5" step="0.01" class={field} />
-            </label>
-          </div>
-          <p class="text-xs mt-2 text-surface-500 dark:text-surface-400">
-            Percentile confidence intervals for paths, loadings, weights, HTMT, total and
-            indirect effects. 10,000 for final reporting.
-          </p>
-        </div>
-
-        <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-800">
-          <label class={toggle}><input id="predict-enabled" type="checkbox" checked /> PLSpredict</label>
-          <div class="mt-3 grid grid-cols-2 gap-3">
-            <label class={label}>Folds
-              <input id="folds" type="number" value="10" min="2" max="50" class={field} />
-            </label>
-            <label class={label}>Scheme
-              <select id="technique" class={field}>
-                <option value="predict_DA">Direct antecedents</option>
-                <option value="predict_EA">Earliest antecedents</option>
-              </select>
-            </label>
-          </div>
-          <label class={toggle + " mt-3"}><input id="cvpat-enabled" type="checkbox" checked /> CVPAT</label>
-          <label class={label + " mt-2"}>CVPAT resamples
-            <input id="cvpat-nboot" type="number" value="1000" min="50" max="5000" step="100" class={field} />
+        <div class="mt-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <label class={label}>Missing-value code
+            <input id="missing-value" type="text" value="-99" class={field} placeholder="e.g. -99 (blank = none)" />
+          </label>
+          <label class={label}>Missing data
+            <select id="missing" class={field}>
+              <option value="mean_replacement">Mean replacement</option>
+              <option value="na_omit">Drop incomplete cases</option>
+            </select>
+          </label>
+          <label class={label}>Inner weighting scheme
+            <select id="inner-weights" class={field}>
+              <option value="path_weighting">Path weighting</option>
+              <option value="path_factorial">Factorial</option>
+            </select>
+          </label>
+          <label class={label}>Random seed
+            <input id="seed" type="number" value="123" min="1" class={field} />
           </label>
         </div>
 
-        <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-800">
-          <label class={toggle}><input id="congruence-enabled" type="checkbox" checked /> Congruence test</label>
-          <div class="mt-3 grid grid-cols-2 gap-3">
-            <label class={label}>Resamples
-              <input id="congruence-nboot" type="number" value="1000" min="50" max="10000" step="100" class={field} />
+        <div class="mt-6 grid md:grid-cols-3 gap-6">
+          <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-800">
+            <label class={toggle}><input id="boot-enabled" type="checkbox" checked /> Bootstrap</label>
+            <div class="mt-3 grid grid-cols-2 gap-3">
+              <label class={label}>Resamples
+                <input id="nboot" type="number" value="2000" min="50" max="10000" step="100" class={field} />
+              </label>
+              <label class={label}>Alpha
+                <input id="alpha" type="number" value="0.05" min="0.001" max="0.5" step="0.01" class={field} />
+              </label>
+            </div>
+            <p class="text-xs mt-2 text-surface-500 dark:text-surface-400">
+              Percentile intervals for paths, loadings, weights, HTMT, total and indirect
+              effects. Use 10,000 for the numbers you publish.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-800">
+            <label class={toggle}><input id="predict-enabled" type="checkbox" checked /> PLSpredict</label>
+            <div class="mt-3 grid grid-cols-2 gap-3">
+              <label class={label}>Folds
+                <input id="folds" type="number" value="10" min="2" max="50" class={field} />
+              </label>
+              <label class={label}>Scheme
+                <select id="technique" class={field}>
+                  <option value="predict_DA">Direct antecedents</option>
+                  <option value="predict_EA">Earliest antecedents</option>
+                </select>
+              </label>
+            </div>
+            <label class={label + " mt-3"}>Key target construct
+              <select id="key-target" class={field}>
+                <option value="auto">Automatic (final outcome)</option>
+              </select>
             </label>
-            <label class={label}>Threshold
-              <input id="congruence-threshold" type="number" value="1" min="0.5" max="1" step="0.05" class={field} />
+            <label class={toggle + " mt-3"}><input id="cvpat-enabled" type="checkbox" checked /> CVPAT</label>
+            <label class={label + " mt-2"}>CVPAT resamples
+              <input id="cvpat-nboot" type="number" value="1000" min="50" max="5000" step="100" class={field} />
             </label>
           </div>
-          <div class="mt-3 text-sm">
-            <span class="text-surface-700 dark:text-surface-300">Matrix diagonal</span>
-            <div class="mt-1 flex flex-wrap gap-4">
-              <label class="inline-flex items-center gap-2">
-                <input type="radio" name="diagonal" value="rhoA" checked />
-                <span>rho<sub>A</sub></span>
+
+          <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-800">
+            <label class={toggle}><input id="congruence-enabled" type="checkbox" checked /> Congruence test</label>
+            <div class="mt-3 grid grid-cols-2 gap-3">
+              <label class={label}>Resamples
+                <input id="congruence-nboot" type="number" value="1000" min="50" max="10000" step="100" class={field} />
               </label>
-              <label class="inline-flex items-center gap-2">
-                <input type="radio" name="diagonal" value="rhoC" />
-                <span>rho<sub>C</sub> <span class="text-surface-500 dark:text-surface-400">(as <code>congruence_test()</code>)</span></span>
+              <label class={label}>Threshold
+                <input id="congruence-threshold" type="number" value="1" min="0.5" max="1" step="0.05" class={field} />
               </label>
+            </div>
+            <div class="mt-3 text-sm">
+              <span class="text-surface-700 dark:text-surface-300">Matrix diagonal</span>
+              <div class="mt-1 flex flex-wrap gap-4">
+                <label class="inline-flex items-center gap-2">
+                  <input type="radio" name="diagonal" value="rhoA" checked />
+                  <span>rho<sub>A</sub></span>
+                </label>
+                <label class="inline-flex items-center gap-2">
+                  <input type="radio" name="diagonal" value="rhoC" />
+                  <span>rho<sub>C</sub> <span class="text-surface-500 dark:text-surface-400">(as <code>congruence_test()</code>)</span></span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </details>
     </section>
 
     <div class="flex flex-wrap items-center gap-3 mb-4">
       <button id="run" type="button"
         class="inline-flex items-center gap-2 font-semibold rounded-lg px-6 py-3 text-base bg-accent-700 text-white hover:bg-accent-800 shadow-sm hover:shadow-md transition-all disabled:opacity-50">
-        Run the analysis
+        Run the full analysis
       </button>
-      <button id="demo" type="button"
-        class="inline-flex items-center gap-2 font-semibold rounded-lg px-6 py-3 text-base bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 transition-all">
-        Load demo
+      <button id="quick" type="button" title="Estimate and assess the measurement model only; takes under a second"
+        class="inline-flex items-center gap-2 font-semibold rounded-lg px-4 py-3 text-sm bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 transition-all disabled:opacity-50">
+        Quick look
+      </button>
+      <span class="text-xs text-surface-500 dark:text-surface-400">Demo:</span>
+      <button type="button" data-demo="corp-rep"
+        class="inline-flex items-center gap-2 font-medium rounded-lg px-3 py-2 text-sm bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 transition-all">
+        Corporate reputation
+      </button>
+      <button type="button" data-demo="moderation"
+        class="inline-flex items-center gap-2 font-medium rounded-lg px-3 py-2 text-sm bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 transition-all">
+        Moderation (CUSA × SC)
       </button>
       <button id="cancel" type="button"
         class="hidden inline-flex items-center gap-2 font-medium rounded-lg px-4 py-3 text-sm text-surface-600 dark:text-surface-400 hover:text-red-600">

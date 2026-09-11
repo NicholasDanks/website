@@ -7,6 +7,7 @@
   from = "/congruence/*"
   to = "/seminr/"
   status = 301
+  force = true
 
 [[headers]]
   for = "/_astro/*"

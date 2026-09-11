@@ -40,6 +40,8 @@ export interface AnalysisOptions {
     seed: number;
     cvpat: boolean;
     cvpatNboot: number;
+    /** The endogenous construct the PLSpredict verdict is judged on; default: the final outcome. */
+    keyTarget?: string;
   };
   congruence: {
     enabled: boolean;
@@ -82,12 +84,34 @@ export interface ConstructInfo {
   /** Human-readable measurement description. */
   label: string;
   items: string[];
+  /**
+   * Epistemic rho: |cor(PLS construct score, first principal component of its
+   * own indicators)|. Below 0.70 the score has been pulled away from its
+   * indicators by the structural neighbours (interpretational confounding).
+   * Undefined for single-item, interaction and higher-order constructs.
+   */
+  epistemicRho?: number;
 }
 
 export interface StageError { error: string }
 
+export type MediationType =
+  | "complementary"      // direct and indirect significant, same sign
+  | "competitive"        // direct and indirect significant, opposite signs
+  | "indirect-only"      // indirect significant, direct not (or no direct path)
+  | "direct-only"        // direct significant, indirect not
+  | "no effect";         // neither significant
+
+export interface SpecificIndirectEffect extends SpecificEffectSignificance {
+  /** Direct effect from -> to in the model, NaN when no direct path is specified. */
+  directEst: number;
+  directP: number;
+  /** Zhao, Lynch & Chen (2010) typology, judged at the bootstrap alpha. */
+  type: MediationType;
+}
+
 export interface MediationResult {
-  specific: SpecificEffectSignificance[];
+  specific: SpecificIndirectEffect[];
   totalIndirect: { from: string; to: string; estimate: number; ciLower: number; ciUpper: number }[];
 }
 
@@ -102,8 +126,26 @@ export interface PredictResult {
   constructError: NamedMatrix;
   /** Q²predict per endogenous indicator against the whole-sample indicator mean. */
   q2Predict: Record<string, number>;
+  /** RMSE of predicting each indicator by its whole-sample mean (the naive benchmark). */
+  naiveRmse: Record<string, number>;
   /** Which endogenous construct each predicted indicator belongs to. */
   itemConstruct: Record<string, string>;
+  /** The construct the headline verdict is judged on. */
+  keyTarget: string;
+  /** Shmueli et al. (2019) verdict per endogenous construct. */
+  verdicts: Record<string, PredictVerdict>;
+}
+
+export type PredictPower = "high" | "medium" | "low" | "none";
+
+export interface PredictVerdict {
+  construct: string;
+  /** Indicators where PLS out-of-sample RMSE < LM RMSE. */
+  betterThanLm: number;
+  indicators: number;
+  /** Indicators where PLS RMSE exceeds the naive-mean RMSE. */
+  worseThanNaive: number;
+  power: PredictPower;
 }
 
 export interface CvpatResult {
@@ -216,6 +258,82 @@ function mediationChains(paths: { from: string; to: string }[], maxMediators = 2
   return chains;
 }
 
+/** Pearson correlation of two equal-length vectors. */
+function cor(a: readonly number[], b: readonly number[]): number {
+  const n = a.length;
+  let ma = 0, mb = 0;
+  for (let i = 0; i < n; i++) { ma += a[i]; mb += b[i]; }
+  ma /= n; mb /= n;
+  let sab = 0, saa = 0, sbb = 0;
+  for (let i = 0; i < n; i++) {
+    const da = a[i] - ma, db = b[i] - mb;
+    sab += da * db; saa += da * da; sbb += db * db;
+  }
+  return sab / Math.sqrt(saa * sbb);
+}
+
+/**
+ * Epistemic rho for one construct: |cor(construct score, PC1 of its items)|.
+ * PC1 is the top eigenvector of the item correlation matrix (power iteration
+ * on a symmetric positive semi-definite matrix, which converges to it).
+ */
+function epistemicRho(model: PlsModel, construct: string, items: readonly string[]): number {
+  const data = model.data;
+  const cols = items.map((it) => data.columns.indexOf(it));
+  if (cols.some((j) => j < 0) || cols.length < 2) return NaN;
+  const n = data.values.length;
+  const k = cols.length;
+  // standardise items
+  const z: number[][] = cols.map((j) => {
+    const v = data.values.map((row) => row[j]);
+    const m = v.reduce((a, b) => a + b, 0) / n;
+    const sd = Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / (n - 1));
+    return v.map((x) => (x - m) / sd);
+  });
+  const R: number[][] = Array.from({ length: k }, () => new Array<number>(k).fill(0));
+  for (let a = 0; a < k; a++) for (let b = a; b < k; b++) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += z[a][i] * z[b][i];
+    R[a][b] = R[b][a] = sum / (n - 1);
+  }
+  let v = new Array<number>(k).fill(1 / Math.sqrt(k));
+  for (let iter = 0; iter < 500; iter++) {
+    const w = R.map((row) => row.reduce((acc, r, j) => acc + r * v[j], 0));
+    const norm = Math.sqrt(w.reduce((acc, x) => acc + x * x, 0));
+    const next = w.map((x) => x / norm);
+    const delta = Math.max(...next.map((x, j) => Math.abs(x - v[j])));
+    v = next;
+    if (delta < 1e-10) break;
+  }
+  const pc1 = Array.from({ length: n }, (_, i) => z.reduce((acc, col, j) => acc + col[i] * v[j], 0));
+  const cs = model.constructScores;
+  const jc = cs.cols.indexOf(construct);
+  if (jc < 0) return NaN;
+  const score = cs.values.map((row) => row[jc]);
+  return Math.abs(cor(score, pc1));
+}
+
+function naiveRmse(actuals: NamedMatrix, items: readonly string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const item of items) {
+    const j = actuals.cols.indexOf(item);
+    if (j < 0) continue;
+    const y = actuals.values.map((r) => r[j]);
+    const mean = y.reduce((a, b) => a + b, 0) / y.length;
+    out[item] = Math.sqrt(y.reduce((a, b) => a + (b - mean) ** 2, 0) / y.length);
+  }
+  return out;
+}
+
+function classifyMediation(directEst: number, directP: number, indirectEst: number, indirectP: number, alpha: number): MediationType {
+  const dSig = Number.isFinite(directP) && directP < alpha;
+  const iSig = indirectP < alpha;
+  if (iSig && dSig) return Math.sign(directEst) === Math.sign(indirectEst) ? "complementary" : "competitive";
+  if (iSig) return "indirect-only";
+  if (dSig) return "direct-only";
+  return "no effect";
+}
+
 function q2Predict(residuals: NamedMatrix, actuals: NamedMatrix): Record<string, number> {
   const out: Record<string, number> = {};
   residuals.cols.forEach((item, j) => {
@@ -271,6 +389,14 @@ export function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {}): An
   const model = timed("estimate", () => estimateParsedModel(parsed, data, options.estimation));
   const summary = summarizePls(model);
   const constructInfos = parsed.measurement.map((m) => describeConstruct(model, parsed, m.name));
+  for (const c of constructInfos) {
+    if ((c.class === "reflective" || c.class === "formative" || c.class === "unit-weights") && c.items.length > 1) {
+      try {
+        const rho = epistemicRho(model, c.name, c.items);
+        if (Number.isFinite(rho)) c.epistemicRho = rho;
+      } catch { /* leave undefined */ }
+    }
+  }
   const pathRows = model.structuralModel.toRows().map((r) => ({ from: r.source, to: r.target }));
   stage("estimate", "done", `${model.iterations} iterations`);
 
@@ -319,9 +445,15 @@ export function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {}): An
       // mediation over every chain the structural model contains
       try {
         const chains = mediationChains(pathRows);
-        const specific = chains.slice(0, 80).map((c) =>
-          specificEffectSignificance(boot!, { from: c.from, to: c.to, through: c.through, alpha: options.bootstrap.alpha }),
-        );
+        const bp = (result.bootstrap as PlsBootSummary).bootstrappedPaths;
+        const specific: SpecificIndirectEffect[] = chains.slice(0, 80).map((c) => {
+          const e = specificEffectSignificance(boot!, { from: c.from, to: c.to, through: c.through, alpha: options.bootstrap.alpha });
+          const label = `${c.from}  ->  ${c.to}`;
+          const i = bp.rows.indexOf(label);
+          const directEst = i >= 0 ? bp.values[i][bp.cols.indexOf("Original Est.")] : NaN;
+          const directP = i >= 0 ? bp.values[i][bp.cols.indexOf("Bootstrap P Val")] : NaN;
+          return { ...e, directEst, directP, type: classifyMediation(directEst, directP, e.originalEst, e.bootstrapP, options.bootstrap.alpha) };
+        });
         const pairs = [...new Set(chains.map((c) => `${c.from} ${c.to}`))].map((k) => k.split(" "));
         const totalIndirect = pairs.map(([from, to]) => {
           const ci = totalIndirectCi(boot!, { from, to, alpha: options.bootstrap.alpha });
@@ -361,6 +493,26 @@ export function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {}): An
         const ps: PlsPredictSummary = summarizePlsPredict(prediction);
         const itemConstruct: Record<string, string> = {};
         for (const c of constructInfos) for (const it of c.items) itemConstruct[it] = c.name;
+        const naive = naiveRmse(prediction.items.itemActuals, ps.plsOutOfSample.cols);
+        const rmse = (m: NamedMatrix, it: string) => m.values[m.rows.indexOf("RMSE")][m.cols.indexOf(it)];
+        const verdicts: Record<string, PredictVerdict> = {};
+        for (const it of ps.plsOutOfSample.cols) {
+          const cname = itemConstruct[it] ?? "?";
+          const v = (verdicts[cname] ??= { construct: cname, betterThanLm: 0, indicators: 0, worseThanNaive: 0, power: "none" });
+          v.indicators++;
+          if (rmse(ps.plsOutOfSample, it) < rmse(ps.lmOutOfSample, it)) v.betterThanLm++;
+          if (rmse(ps.plsOutOfSample, it) > naive[it]) v.worseThanNaive++;
+        }
+        for (const v of Object.values(verdicts)) {
+          v.power = v.betterThanLm === v.indicators ? "high" : v.betterThanLm > v.indicators / 2 ? "medium" : v.betterThanLm > 0 ? "low" : "none";
+        }
+        // Default key target: an endogenous construct that predicts nothing else (the final outcome).
+        const endogenous = Object.keys(verdicts);
+        const sources = new Set(pathRows.map((p) => p.from));
+        const requested = options.predict.keyTarget;
+        const keyTarget = requested && verdicts[requested]
+          ? requested
+          : endogenous.find((c) => !sources.has(c)) ?? endogenous[endogenous.length - 1] ?? "";
         return {
           noFolds: options.predict.noFolds,
           technique: options.predict.technique,
@@ -371,7 +523,10 @@ export function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {}): An
           lmInSample: ps.lmInSample,
           constructError: ps.constructError,
           q2Predict: q2Predict(prediction.items.plsOutOfSampleResiduals, prediction.items.itemActuals),
+          naiveRmse: naive,
           itemConstruct,
+          keyTarget,
+          verdicts,
         } satisfies PredictResult;
       });
       result.predict = pr;

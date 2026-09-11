@@ -167,6 +167,25 @@ console.log("\nBootstrap and derived stages");
   check("R script mentions every construct", res.model.constructs.every((c) => res.rScript.includes(`"${c.name}"`)));
   check("result is JSON-serialisable", JSON.parse(JSON.stringify(res)).schemaVersion === 1);
   check("DOT graphs present", res.model.dot.startsWith("digraph") && res.model.dotBoot.startsWith("digraph"));
+  check("epistemic rho on every multi-item construct, in [0, 1]",
+    res.model.constructs.filter((c) => c.items.length > 1).every((c) => c.epistemicRho > 0 && c.epistemicRho <= 1 + 1e-12));
+  check("mode A epistemic rho is near 1 (score ≈ first principal component)",
+    res.model.constructs.filter((c) => c.class === "reflective").every((c) => c.epistemicRho > 0.95));
+  check("PLSpredict key target defaults to the final outcome", res.predict.keyTarget === "CUSL", res.predict.keyTarget);
+  check("naive RMSE equals the indicator SD after mean replacement (population)", (() => {
+    const it = "cusl_1";
+    const col = parseDataText(dataText).data.columns.indexOf(it);
+    const raw = parseDataText(dataText).data.values.map((r) => r[col]);
+    const seen = raw.filter((v) => v !== -99);
+    const fill = seen.reduce((a, b) => a + b, 0) / seen.length;
+    const y = raw.map((v) => (v === -99 ? fill : v));
+    const m = y.reduce((a, b) => a + b, 0) / y.length;
+    const sd = Math.sqrt(y.reduce((a, b) => a + (b - m) ** 2, 0) / y.length);
+    return Math.abs(sd - res.predict.naiveRmse[it]) < 1e-9;
+  })());
+  check("mediation chains carry a Zhao typology", res.mediation.specific.every((e) => ["complementary", "competitive", "indirect-only", "direct-only", "no effect"].includes(e.type)));
+  check("assessment splits gates from findings",
+    res.assessment.some((a) => a.kind === "gate") && res.assessment.some((a) => a.kind === "finding") && res.assessment.filter((a) => a.kind === "finding").every((a) => a.status === "info"));
 }
 
 console.log(failures === 0 ? "\nAll seminr pipeline checks passed.\n" : `\n${failures} check(s) FAILED.\n`);
