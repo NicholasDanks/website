@@ -57,14 +57,20 @@ export interface Digest {
   constructs: { name: string; measurement: string; class: string; items: string[]; epistemicRho: number | null }[];
   paths: { from: string; to: string; beta: number | null; p: number | null; ciLower: number | null; ciUpper: number | null; f2: number | null }[];
   rSquared: Record<string, { r2: number | null; adjusted: number | null }>;
+  /** Alpha, rho_A, rho_C, AVE for reflective / mode A constructs only (meaningless for mode B). */
   reliability: Record<string, Record<string, number | null>>;
+  unidimensionality: { construct: string; eigenvalues: number[]; adjustedEigenvalues: number[]; revelleBeta: number | null; unidimensional: boolean }[];
+  /** Ch. 5.3.1 redundancy analysis where a global item was found. */
+  redundancy: { construct: string; globalItem: string; path: number | null }[];
   loadings: Record<string, Record<string, number | null>>;
   weights: Record<string, { indicator: string; weight: number | null; p: number | null; loading: number | null; vif: number | null }[]>;
+  /** Reflective multi-item construct pairs only; ciUpper is the 95% one-sided upper bound (alpha 0.10). */
   htmt: { pair: string; htmt: number | null; ciUpper: number | null }[];
   antecedentVif: Record<string, Record<string, number | null>>;
   constructCorrelations: Record<string, Record<string, number | null>>;
   indicatorStatistics: Record<string, Record<string, number | null>>;
-  mediation: { path: string; indirect: number | null; p: number | null; direct: number | null; directP: number | null; type: string }[];
+  mediation: { path: string; indirect: number | null; p: number | null; direct: number | null; directP: number | null; type: string; upsilon: number | null }[];
+  moderatedMediation: { antecedent: string; mediator: string; moderator: string; outcome: string; index: number | null; ciLower: number | null; ciUpper: number | null; p: number | null }[];
   predict: null | {
     verdicts: Record<string, { power: string; betterThanLm: number; indicators: number; worseThanNaive: number }>;
     indicators: { indicator: string; construct: string; plsRmse: number | null; lmRmse: number | null; naiveRmse: number | null; q2predict: number | null }[];
@@ -129,13 +135,15 @@ export function buildDigest(r: AnalysisResult, availableColumns: string[], label
     }
   }
 
+  const reflectiveNames = new Set(r.model.constructs.filter((c) => c.class === "reflective" && c.items.length > 1).map((c) => c.name));
   const htmt: Digest["htmt"] = [];
-  const bh = boot?.bootstrappedHtmt;
+  const bh = boot?.bootstrappedHtmt90 ?? boot?.bootstrappedHtmt;
   const hm = s.validity.htmt;
   for (let i = 0; i < hm.rows.length; i++) for (let j = 0; j < hm.cols.length; j++) {
     const v = hm.values[i][j];
     if (!Number.isFinite(v)) continue;
     const a = hm.rows[i], b = hm.cols[j];
+    if (!reflectiveNames.has(a) || !reflectiveNames.has(b)) continue;
     const up = bh ? (Number.isFinite(cell(bh, `${a}  ->  ${b}`, ciHi)) ? cell(bh, `${a}  ->  ${b}`, ciHi) : cell(bh, `${b}  ->  ${a}`, ciHi)) : NaN;
     htmt.push({ pair: `${a} <-> ${b}`, htmt: r3(v), ciUpper: r3(up) });
   }
@@ -164,14 +172,17 @@ export function buildDigest(r: AnalysisResult, availableColumns: string[], label
     constructs: r.model.constructs.map((c) => ({ name: c.name, measurement: c.label, class: c.class, items: c.items, epistemicRho: c.epistemicRho === undefined ? null : r3(c.epistemicRho) })),
     paths,
     rSquared,
-    reliability: matrixToObject(s.reliability),
+    reliability: Object.fromEntries(Object.entries(matrixToObject(s.reliability)).filter(([name]) => reflectiveNames.has(name))),
+    unidimensionality: r.unidimensionality.map((u) => ({ construct: u.construct, eigenvalues: u.eigenvalues.map((e) => r3(e) ?? 0), adjustedEigenvalues: u.adjustedEigenvalues.map((e) => r3(e) ?? 0), revelleBeta: u.revelleBeta === null ? null : r3(u.revelleBeta), unidimensional: u.unidimensional })),
+    redundancy: r.redundancy.map((x) => ({ construct: x.construct, globalItem: x.globalItem, path: r3(x.path) })),
     loadings,
     weights,
     htmt,
     antecedentVif,
     constructCorrelations: matrixToObject(s.descriptives.correlations.constructs),
     indicatorStatistics: matrixToObject(s.descriptives.statistics.items),
-    mediation: med ? med.specific.map((e) => ({ path: e.path, indirect: r3(e.originalEst), p: r3(e.bootstrapP), direct: r3(e.directEst), directP: r3(e.directP), type: e.type })) : [],
+    mediation: med ? med.specific.map((e) => ({ path: e.path, indirect: r3(e.originalEst), p: r3(e.bootstrapP), direct: r3(e.directEst), directP: r3(e.directP), type: e.type, upsilon: r3(e.upsilon) })) : [],
+    moderatedMediation: (r.moderatedMediation ?? []).map((m) => ({ antecedent: m.antecedent, mediator: m.mediator, moderator: m.moderator, outcome: m.outcome, index: r3(m.index), ciLower: r3(m.ciLower), ciUpper: r3(m.ciUpper), p: r3(m.p) })),
     predict: pr ? {
       verdicts: Object.fromEntries(Object.values(pr.verdicts).map((v) => [v.construct, { power: v.power, betterThanLm: v.betterThanLm, indicators: v.indicators, worseThanNaive: v.worseThanNaive }])),
       indicators: pr.plsOutOfSample.cols.map((it) => ({

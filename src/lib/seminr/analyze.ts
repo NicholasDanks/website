@@ -13,6 +13,9 @@
 import {
   summarizePls, summarizePlsBoot, predictPls, summarizePlsPredict, predictDA, predictEA,
   specificEffectSignificance, totalIndirectCi, dotGraph, constructType, constructItems,
+  constructs as mkConstructs, composite as mkComposite, relationships as mkRelationships, paths as mkPaths,
+  estimatePls, meanReplacement, naOmit, pathWeighting, pathFactorial, modeB as MODE_B, slopeAnalysis,
+  parseBootArrayHtmt, htmt as htmtOf,
   version as coreVersion,
   type PlsModel, type BootModel, type PlsSummary, type PlsBootSummary, type PlsPredictSummary,
   type NamedMatrix, type SpecificEffectSignificance,
@@ -20,7 +23,9 @@ import {
 import { assessCvpat, version as extrasVersion } from "@seminr/extras";
 import { parseSeminrModel, requiredItems, type ParsedModel } from "./parseSeminr";
 import { parseDataText, selectColumns, missingCounts } from "./data";
+import { RRNG as _RRNG } from "./rrng";
 import { estimateParsedModel, type EstimationOptions } from "./specify";
+import type { Dataset } from "@seminr/core";
 import { bootstrapShared } from "./bootstrap";
 import { congruenceSpec, congruenceFromReplications, type Diagonal, type ModelCongruenceResult } from "./congruence";
 import { RRNG } from "./rrng";
@@ -98,9 +103,11 @@ export interface StageError { error: string }
 export type MediationType =
   | "complementary"      // direct and indirect significant, same sign
   | "competitive"        // direct and indirect significant, opposite signs
-  | "indirect-only"      // indirect significant, direct not (or no direct path)
+  | "indirect-only"      // indirect significant, direct estimated and not significant
   | "direct-only"        // direct significant, indirect not
-  | "no effect";         // neither significant
+  | "no effect"          // neither significant
+  | "indirect (direct path not in model)"   // indirect significant; the competing direct path was never estimated
+  | "none (direct path not in model)";      // indirect not significant; direct path never estimated
 
 export interface SpecificIndirectEffect extends SpecificEffectSignificance {
   /** Direct effect from -> to in the model, NaN when no direct path is specified. */
@@ -108,6 +115,52 @@ export interface SpecificIndirectEffect extends SpecificEffectSignificance {
   directP: number;
   /** Zhao, Lynch & Chen (2010) typology, judged at the bootstrap alpha. */
   type: MediationType;
+  /** Upsilon effect size: the product of the squared path coefficients along the chain (Lachowicz et al., 2018). */
+  upsilon: number;
+}
+
+/** Unidimensionality evidence for a reflective construct, as PLS-SEM Using R Ch. 4.2. */
+export interface Unidimensionality {
+  construct: string;
+  /** Eigenvalues of the indicator correlation matrix, descending. */
+  eigenvalues: number[];
+  /** Horn's parallel analysis: eigenvalues adjusted by the 95th centile of random-data eigenvalues. */
+  adjustedEigenvalues: number[];
+  /** Revelle's beta: the worst split-half reliability over all splits (exhaustive for ≤ 12 items). */
+  revelleBeta: number | null;
+  alpha: number;
+  /** True when only the first adjusted eigenvalue exceeds 1. */
+  unidimensional: boolean;
+}
+
+/** Redundancy analysis of a formative construct against a global single-item measure (Ch. 5.3.1). */
+export interface RedundancyAnalysis {
+  construct: string;
+  globalItem: string;
+  /** Path coefficient from the formative composite to the global item (≥ 0.70 expected). */
+  path: number;
+  rSquared: number;
+}
+
+/** Ch. 8.3: index of moderated mediation, p(antecedent → mediator) × p(mediator × moderator → outcome). */
+export interface ModeratedMediation {
+  antecedent: string;
+  mediator: string;
+  moderator: string;
+  outcome: string;
+  index: number;
+  ciLower: number;
+  ciUpper: number;
+  p: number;
+}
+
+/** Simple-slopes plot of an interaction term (Ch. 7.2). */
+export interface SlopePlot {
+  interaction: string;
+  iv: string;
+  moderator: string;
+  dv: string;
+  svg: string;
 }
 
 export interface MediationResult {
@@ -185,8 +238,20 @@ export interface AnalysisResult {
     /** Graphviz DOT of the bootstrapped model, as seminr's plot(boot_model). */
     dotBoot?: string;
   };
+  /** Ch. 4.2: unidimensionality of every multi-item reflective / mode A construct. */
+  unidimensionality: Unidimensionality[];
+  /** Ch. 5.3.1: redundancy analysis for every formative construct with a detectable global item. */
+  redundancy: RedundancyAnalysis[];
+  /** Ch. 7.2: simple-slope plots for every interaction term. */
+  slopes: SlopePlot[];
   summary: Omit<PlsSummary, "compositeScores">;
-  bootstrap?: (PlsBootSummary & { seed: number; alpha: number; fails: number }) | StageError;
+  bootstrap?: (PlsBootSummary & {
+    seed: number; alpha: number; fails: number;
+    /** HTMT intervals at alpha = 0.10, i.e. the one-sided 95% upper bound the textbook inspects (Ch. 4.6). */
+    bootstrappedHtmt90: NamedMatrix;
+  }) | StageError;
+  /** Ch. 8.3: index of moderated mediation for every antecedent → mediator × moderator → outcome chain. */
+  moderatedMediation?: ModeratedMediation[];
   mediation?: MediationResult | StageError;
   predict?: PredictResult | StageError;
   cvpat?: CvpatResult | StageError;
@@ -313,6 +378,167 @@ function epistemicRho(model: PlsModel, construct: string, items: readonly string
   return Math.abs(cor(score, pc1));
 }
 
+/** Standardised item columns and their correlation matrix, from the cleaned estimation data. */
+function itemCorrelation(model: PlsModel, items: readonly string[]): { z: number[][]; R: number[][] } | null {
+  const data = model.data;
+  const cols = items.map((it) => data.columns.indexOf(it));
+  if (cols.some((j) => j < 0) || cols.length < 2) return null;
+  const n = data.values.length;
+  const k = cols.length;
+  const z: number[][] = cols.map((j) => {
+    const v = data.values.map((row) => row[j]);
+    const m = v.reduce((a, b) => a + b, 0) / n;
+    const sd = Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / (n - 1));
+    return v.map((x) => (x - m) / sd);
+  });
+  const R: number[][] = Array.from({ length: k }, () => new Array<number>(k).fill(0));
+  for (let a = 0; a < k; a++) for (let b = a; b < k; b++) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += z[a][i] * z[b][i];
+    R[a][b] = R[b][a] = sum / (n - 1);
+  }
+  return { z, R };
+}
+
+/** Eigenvalues of a small symmetric matrix by cyclic Jacobi rotations, descending. */
+function symmetricEigenvalues(A: readonly (readonly number[])[]): number[] {
+  const k = A.length;
+  const M = A.map((r) => [...r]);
+  for (let sweep = 0; sweep < 100; sweep++) {
+    let off = 0;
+    for (let p = 0; p < k; p++) for (let q = p + 1; q < k; q++) off += M[p][q] ** 2;
+    if (off < 1e-22) break;
+    for (let p = 0; p < k; p++) for (let q = p + 1; q < k; q++) {
+      if (Math.abs(M[p][q]) < 1e-300) continue;
+      const theta = (M[q][q] - M[p][p]) / (2 * M[p][q]);
+      const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+      const c = 1 / Math.sqrt(t * t + 1), s0 = t * c;
+      for (let r = 0; r < k; r++) {
+        const mrp = M[r][p], mrq = M[r][q];
+        M[r][p] = c * mrp - s0 * mrq;
+        M[r][q] = s0 * mrp + c * mrq;
+      }
+      for (let r = 0; r < k; r++) {
+        const mpr = M[p][r], mqr = M[q][r];
+        M[p][r] = c * mpr - s0 * mqr;
+        M[q][r] = s0 * mpr + c * mqr;
+      }
+    }
+  }
+  return M.map((r, i) => r[i]).sort((a, b) => b - a);
+}
+
+/**
+ * Horn's parallel analysis (95th centile, as paran::paran): eigenvalues of
+ * correlation matrices of random normal data with the same n and k. Returns the
+ * bias to subtract per component (centile eigenvalue − 1).
+ */
+function parallelBias(n: number, k: number, iterations: number, seed: number): number[] {
+  const rng = new _RRNG(seed);
+  const normal = () => {
+    const u = rng.unifRand(), v = rng.unifRand();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+  const draws: number[][] = Array.from({ length: k }, () => []);
+  for (let it = 0; it < iterations; it++) {
+    const cols: number[][] = Array.from({ length: k }, () => Array.from({ length: n }, normal));
+    const R: number[][] = Array.from({ length: k }, () => new Array<number>(k).fill(0));
+    for (let a = 0; a < k; a++) {
+      const ma = cols[a].reduce((x, y) => x + y, 0) / n;
+      for (let i = 0; i < n; i++) cols[a][i] -= ma;
+    }
+    const sd = cols.map((c) => Math.sqrt(c.reduce((x, y) => x + y * y, 0) / (n - 1)));
+    for (let a = 0; a < k; a++) for (let b = a; b < k; b++) {
+      let sum = 0;
+      for (let i = 0; i < n; i++) sum += cols[a][i] * cols[b][i];
+      R[a][b] = R[b][a] = sum / (n - 1) / (sd[a] * sd[b]);
+    }
+    symmetricEigenvalues(R).forEach((e, j) => draws[j].push(e));
+  }
+  return draws.map((d) => {
+    const sorted = d.sort((a, b) => a - b);
+    const h = (sorted.length - 1) * 0.95;
+    const lo = Math.floor(h), hi = Math.min(lo + 1, sorted.length - 1);
+    return sorted[lo] + (h - lo) * (sorted[hi] - sorted[lo]) - 1;
+  });
+}
+
+/**
+ * Revelle's beta: the lowest split-half reliability over every way of
+ * splitting the items into two halves, with psych's definition of the split
+ * reliability, k² × mean inter-half covariance / total variance (which treats
+ * the halves as if parallel, so unequal halves are not penalised). Exhaustive
+ * up to 12 items; null beyond. Reproduces the textbook's psych::iclust values.
+ */
+function revelleBeta(R: readonly (readonly number[])[]): number | null {
+  const k = R.length;
+  if (k < 2 || k > 12) return null;
+  let total = 0;
+  for (let a = 0; a < k; a++) for (let b = 0; b < k; b++) total += R[a][b];
+  let worst = Infinity;
+  const limit = 1 << (k - 1);
+  // item 0 always sits in half A, so each split is visited once; mask = limit - 1
+  // would leave half B empty and is skipped. Halves need not be equal in size.
+  for (let mask = 0; mask < limit - 1; mask++) {
+    let cross = 0;
+    for (let a = 0; a < k; a++) for (let b = 0; b < k; b++) {
+      const inA = a === 0 || (mask & (1 << (a - 1))) !== 0;
+      const inB = b === 0 || (mask & (1 << (b - 1))) !== 0;
+      if (inA && !inB) cross += R[a][b];
+    }
+    let nA = 0;
+    for (let a = 0; a < k; a++) if (a === 0 || (mask & (1 << (a - 1))) !== 0) nA++;
+    const nB = k - nA;
+    const beta = (k * k * (cross / (nA * nB))) / total;
+    if (beta < worst) worst = beta;
+  }
+  return worst;
+}
+
+function unidimensionality(model: PlsModel, c: ConstructInfo, alpha: number, seed: number): Unidimensionality | null {
+  const ic = itemCorrelation(model, c.items);
+  if (!ic) return null;
+  const eigen = symmetricEigenvalues(ic.R);
+  const bias = parallelBias(model.data.values.length, c.items.length, 500, seed);
+  const adjusted = eigen.map((e, j) => e - bias[j]);
+  return {
+    construct: c.name,
+    eigenvalues: eigen,
+    adjustedEigenvalues: adjusted,
+    revelleBeta: revelleBeta(ic.R),
+    alpha,
+    unidimensional: adjusted[0] > 1 && (adjusted.length < 2 || adjusted[1] <= 1),
+  };
+}
+
+/** Find a global single-item measure for a formative construct, by the textbook's naming (qual_global for QUAL). */
+function findGlobalItem(c: ConstructInfo, columns: readonly string[]): string | null {
+  const lower = new Map(columns.map((col) => [col.toLowerCase(), col]));
+  const name = c.name.toLowerCase();
+  const stub = c.items.length ? c.items[0].replace(/\d+$/, "") : "";
+  const candidates = [`${name}_global`, `${name}global`, `${stub}global`, `${stub}_global`, `global_${name}`, `${name}_overall`, `${name}_g`];
+  for (const cand of candidates) {
+    const hit = lower.get(cand.toLowerCase());
+    if (hit && !c.items.includes(hit)) return hit;
+  }
+  return null;
+}
+
+function redundancyAnalysis(c: ConstructInfo, globalItem: string, full: Dataset, options: EstimationOptions): RedundancyAnalysis {
+  const data = selectColumns(full, [...c.items, globalItem]);
+  const mm = mkConstructs(mkComposite(c.name, c.items, MODE_B), mkComposite(`${c.name}_global`, [globalItem]));
+  const sm = mkRelationships(mkPaths({ from: c.name, to: `${c.name}_global` }));
+  const m = estimatePls({
+    data, measurementModel: mm, structuralModel: sm,
+    innerWeights: options.innerWeights === "path_factorial" ? pathFactorial : pathWeighting,
+    missing: options.missing === "na_omit" ? naOmit : meanReplacement,
+    missingValue: options.missingValue,
+  });
+  const pc = m.pathCoef;
+  const path = pc.values[pc.rows.indexOf(c.name)][pc.cols.indexOf(`${c.name}_global`)];
+  return { construct: c.name, globalItem, path, rSquared: path * path };
+}
+
 function naiveRmse(actuals: NamedMatrix, items: readonly string[]): Record<string, number> {
   const out: Record<string, number> = {};
   for (const item of items) {
@@ -326,8 +552,9 @@ function naiveRmse(actuals: NamedMatrix, items: readonly string[]): Record<strin
 }
 
 function classifyMediation(directEst: number, directP: number, indirectEst: number, indirectP: number, alpha: number): MediationType {
-  const dSig = Number.isFinite(directP) && directP < alpha;
   const iSig = indirectP < alpha;
+  if (!Number.isFinite(directEst)) return iSig ? "indirect (direct path not in model)" : "none (direct path not in model)";
+  const dSig = Number.isFinite(directP) && directP < alpha;
   if (iSig && dSig) return Math.sign(directEst) === Math.sign(indirectEst) ? "complementary" : "competitive";
   if (iSig) return "indirect-only";
   if (dSig) return "direct-only";
@@ -404,6 +631,33 @@ export async function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {
   const pathRows = model.structuralModel.toRows().map((r) => ({ from: r.source, to: r.target }));
   stage("estimate", "done", `${model.iterations} iterations`);
 
+  // Ch. 4.2 unidimensionality for reflective / mode A multi-item constructs
+  const unidim: Unidimensionality[] = [];
+  for (const c of constructInfos) {
+    if (c.class !== "reflective" || c.items.length < 2) continue;
+    try {
+      const u = unidimensionality(model, c, (() => { const m = summary.reliability; const i = m.rows.indexOf(c.name); return i >= 0 ? m.values[i][m.cols.indexOf("alpha")] : NaN; })(), options.bootstrap.seed);
+      if (u) unidim.push(u);
+    } catch { /* skip */ }
+  }
+  // Ch. 5.3.1 redundancy analysis wherever a global item can be found in the data
+  const redundancy: RedundancyAnalysis[] = [];
+  for (const c of constructInfos) {
+    if (c.class !== "formative" && c.class !== "unit-weights") continue;
+    const g = findGlobalItem(c, parsedData.data.columns);
+    if (!g) continue;
+    try { redundancy.push(redundancyAnalysis(c, g, parsedData.data, options.estimation)); } catch { /* skip */ }
+  }
+  // Ch. 7.2 simple slopes for every interaction term with a path into a construct
+  const slopes: SlopePlot[] = [];
+  for (const m of parsed.measurement) {
+    if (m.kind !== "interaction" || m.quadratic) continue;
+    for (const p of pathRows) {
+      if (p.from !== m.name) continue;
+      try { slopes.push({ interaction: m.name, iv: m.iv, moderator: m.moderator, dv: p.to, svg: String(slopeAnalysis(model, p.to, m.moderator, m.iv)) }); } catch { /* skip */ }
+    }
+  }
+
   const result: AnalysisResult = {
     schemaVersion: SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
@@ -424,6 +678,9 @@ export async function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {
       dot: dotGraph(model, { title: "" }),
     },
     summary: (() => { const { compositeScores: _cs, ...rest } = summary; return rest; })(),
+    unidimensionality: unidim,
+    redundancy,
+    slopes,
     assessment: [],
     rScript: "",
     timingsMs: timings,
@@ -468,7 +725,31 @@ export async function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {
       boot = shared.boot;
       if (!boot) throw new Error("The bootstrap produced no replications.");
       const bs = summarizePlsBoot(boot, options.bootstrap.alpha);
-      result.bootstrap = { ...bs, seed: options.bootstrap.seed, alpha: options.bootstrap.alpha, fails: boot.fails };
+      result.bootstrap = {
+        ...bs, seed: options.bootstrap.seed, alpha: options.bootstrap.alpha, fails: boot.fails,
+        bootstrappedHtmt90: parseBootArrayHtmt(htmtOf(model), boot.bootHtmt, 0.10),
+      };
+      // Ch. 8.3 index of moderated mediation: antecedent -> mediator, mediator*moderator -> outcome
+      try {
+        const mm: ModeratedMediation[] = [];
+        for (const m of parsed.measurement) {
+          if (m.kind !== "interaction" || m.quadratic) continue;
+          for (const out of pathRows.filter((p) => p.from === m.name)) {
+            for (const ante of pathRows.filter((p) => p.to === m.iv)) {
+              const prod = boot.bootPaths.map((bp) => {
+                const g = (a: string, b: string) => bp.values[bp.rows.indexOf(a)][bp.cols.indexOf(b)];
+                return g(ante.from, m.iv) * g(m.name, out.to);
+              }).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+              const q = (pq: number) => { const h = (prod.length - 1) * pq; const lo = Math.floor(h), hi = Math.min(lo + 1, prod.length - 1); return prod[lo] + (h - lo) * (prod[hi] - prod[lo]); };
+              const below = prod.filter((v) => v <= 0).length / prod.length;
+              const pc = model.pathCoef;
+              const g0 = (a: string, b: string) => pc.values[pc.rows.indexOf(a)][pc.cols.indexOf(b)];
+              mm.push({ antecedent: ante.from, mediator: m.iv, moderator: m.moderator, outcome: out.to, index: g0(ante.from, m.iv) * g0(m.name, out.to), ciLower: q(options.bootstrap.alpha / 2), ciUpper: q(1 - options.bootstrap.alpha / 2), p: 2 * Math.min(below, 1 - below) });
+            }
+          }
+        }
+        if (mm.length) result.moderatedMediation = mm;
+      } catch { /* optional */ }
       result.model.dotBoot = dotGraph(boot, { title: "", alpha: options.bootstrap.alpha });
       stage("bootstrap", "done", `${boot.boots} resamples${boot.fails ? `, ${boot.fails} failed` : ""}`);
       if (fused && congSpec) {
@@ -491,7 +772,14 @@ export async function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {
           const i = bp.rows.indexOf(label);
           const directEst = i >= 0 ? bp.values[i][bp.cols.indexOf("Original Est.")] : NaN;
           const directP = i >= 0 ? bp.values[i][bp.cols.indexOf("Bootstrap P Val")] : NaN;
-          return { ...e, directEst, directP, type: classifyMediation(directEst, directP, e.originalEst, e.bootstrapP, options.bootstrap.alpha) };
+          const chain = [c.from, ...c.through, c.to];
+          let upsilon = 1;
+          for (let k = 0; k + 1 < chain.length; k++) {
+            const m = result.summary.paths;
+            const i = m.rows.indexOf(chain[k]), j = m.cols.indexOf(chain[k + 1]);
+            upsilon *= i >= 0 && j >= 0 ? m.values[i][j] ** 2 : NaN;
+          }
+          return { ...e, directEst, directP, type: classifyMediation(directEst, directP, e.originalEst, e.bootstrapP, options.bootstrap.alpha), upsilon };
         });
         const pairs = [...new Set(chains.map((c) => `${c.from} ${c.to}`))].map((k) => k.split(" "));
         const totalIndirect = pairs.map(([from, to]) => {
@@ -584,6 +872,8 @@ export async function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {
             nboot: options.predict.cvpatNboot,
             seed: options.predict.seed,
             noFolds: options.predict.noFolds,
+            // One-tailed, H1: PLS predicts better than the benchmark — as the textbook (Ch. 6.3).
+            testtype: "greater",
           }),
         );
         if (!cv) throw new Error("CVPAT is not defined for this model (higher-order models are not supported).");

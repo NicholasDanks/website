@@ -432,6 +432,57 @@ let evalAbort: AbortController | null = null;
 let evalBusy = false;
 const evalUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 const alternativeRuns = new Map<string, { input: RunModelInput; result: AnalysisResult }>();
+let alternativeCount = 0;
+let workingTimer: ReturnType<typeof setInterval> | null = null;
+
+/** The panel-wide "Claude is working" banner with phase and elapsed time. */
+function setWorking(phase: string | null) {
+  const el = $("eval-working");
+  if (phase === null) {
+    el.classList.add("hidden");
+    if (workingTimer) { clearInterval(workingTimer); workingTimer = null; }
+    return;
+  }
+  el.classList.remove("hidden");
+  el.querySelector(".phase")!.textContent = phase;
+  if (!workingTimer) {
+    const started = Date.now();
+    const tick = () => { el.querySelector(".elapsed")!.textContent = `${Math.round((Date.now() - started) / 1000)} s`; };
+    tick();
+    workingTimer = setInterval(tick, 1000);
+  }
+}
+
+/** Compare an alternative run with the model under review, in a few lines. */
+function compareRuns(base: AnalysisResult, alt: AnalysisResult): string {
+  const gates = (r: AnalysisResult) => r.assessment.filter((a) => a.kind === "gate");
+  const g0 = gates(base), g1 = gates(alt);
+  const count = (xs: typeof g0, st: string) => xs.filter((a) => a.status === st).length;
+  const sig = (r: AnalysisResult) => {
+    const b = r.bootstrap && !("error" in r.bootstrap) ? r.bootstrap.bootstrappedPaths : null;
+    if (!b) return null;
+    const pj = b.cols.indexOf("Bootstrap P Val");
+    return { total: b.rows.length, supported: b.rows.filter((_, i) => b.values[i][pj] < r.input.options.bootstrap.alpha).length };
+  };
+  const s0 = sig(base), s1 = sig(alt);
+  const key = alt.predict && !("error" in alt.predict) ? alt.predict.keyTarget : base.predict && !("error" in base.predict) ? base.predict.keyTarget : alt.summary.paths.cols[alt.summary.paths.cols.length - 1];
+  const r2 = (r: AnalysisResult) => { const m = r.summary.paths; const i = m.rows.indexOf("R^2"), j = m.cols.indexOf(key); return i >= 0 && j >= 0 ? m.values[i][j] : NaN; };
+  const beta = (r: AnalysisResult, from: string, to: string) => { const m = r.summary.paths; const i = m.rows.indexOf(from), j = m.cols.indexOf(to); return i >= 0 && j >= 0 ? m.values[i][j] : NaN; };
+  const shared = alt.model.paths.filter((p) => base.model.paths.some((q) => q.from === p.from && q.to === p.to));
+  const moved = shared.map((p) => ({ p, d: beta(alt, p.from, p.to) - beta(base, p.from, p.to) })).filter((x) => Number.isFinite(x.d)).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 3);
+  const added = alt.model.paths.filter((p) => !base.model.paths.some((q) => q.from === p.from && q.to === p.to));
+  const removed = base.model.paths.filter((p) => !alt.model.paths.some((q) => q.from === p.from && q.to === p.to));
+  const f = (x: number) => (Number.isFinite(x) ? x.toFixed(3) : "n/a");
+  const lines = [
+    `Quality gates: ${count(g1, "fail")} problems, ${count(g1, "warn")} to check (was ${count(g0, "fail")} / ${count(g0, "warn")}).`,
+    s1 && s0 ? `Paths supported: ${s1.supported} of ${s1.total} (was ${s0.supported} of ${s0.total}).` : s1 ? `Paths supported: ${s1.supported} of ${s1.total}.` : "No bootstrap in this run.",
+    `R² of ${key}: ${f(r2(alt))} (was ${f(r2(base))}).`,
+    added.length ? `Added paths: ${added.map((p) => `${p.from} → ${p.to}`).join(", ")}.` : "",
+    removed.length ? `Removed paths: ${removed.map((p) => `${p.from} → ${p.to}`).join(", ")}.` : "",
+    moved.length ? `Largest coefficient changes: ${moved.map((x) => `${x.p.from} → ${x.p.to} ${f(beta(base, x.p.from, x.p.to))} → ${f(beta(alt, x.p.from, x.p.to))}`).join("; ")}.` : "",
+  ].filter(Boolean);
+  return `<ul class="compare">${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>`;
+}
 
 function loadKey(): string {
   try { return sessionStorage.getItem(KEY_STORAGE) ?? localStorage.getItem(KEY_STORAGE) ?? ""; } catch { return ""; }
@@ -460,7 +511,22 @@ function mdToHtml(md: string): string {
     .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
   const flushPara = () => { if (para.length) { out.push(`<p>${inline(para.join(" "))}</p>`); para = []; } };
   const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  let table: string[][] | null = null;
+  const flushTable = () => {
+    if (!table) return;
+    const [head, ...body] = table;
+    out.push(`<div class="tblwrap"><table class="tbl"><thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>${body.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+    table = null;
+  };
   for (const raw of lines) {
+    if (/^\s*\|.*\|\s*$/.test(raw) && !code) {
+      const cells = raw.trim().slice(1, -1).split("|").map((c) => c.trim());
+      if (cells.every((c) => /^:?-{2,}:?$/.test(c))) continue; // separator row
+      flushPara(); closeList();
+      (table ??= []).push(cells);
+      continue;
+    }
+    flushTable();
     if (code) {
       if (/^```/.test(raw)) { out.push(`<pre class="code"><code>${esc(code.join("\n"))}</code></pre>`); code = null; }
       else code.push(raw);
@@ -480,7 +546,7 @@ function mdToHtml(md: string): string {
     if (raw.trim() === "") { flushPara(); closeList(); continue; }
     para.push(raw.trim());
   }
-  flushPara(); closeList();
+  flushPara(); closeList(); flushTable();
   if (code) out.push(`<pre class="code"><code>${esc(code.join("\n"))}</code></pre>`);
   return out.join("");
 }
@@ -524,12 +590,16 @@ async function runModelForAssistant(input: RunModelInput, card: HTMLElement): Pr
     predict: { ...base.predict, enabled: input.predict, cvpat: input.predict, cvpatNboot: Math.min(base.predict.cvpatNboot, 500) },
     congruence: { ...base.congruence, enabled: false },
   };
+  const started = Date.now();
   const result = await analyzeInWorker({ code: input.code, dataText: val("data"), dataName, options }, (stage) => {
-    card.querySelector(".tool-stage")!.textContent = stage + "…";
+    card.querySelector(".tool-stage")!.textContent = `${stage}…`;
+    setWorking(`Testing alternative ${alternativeCount}: ${stage.toLowerCase()}`);
   });
   const digest = buildDigest(result, dataColumns, input.label);
   if (!digestLooksSafe(digest)) throw new Error("Digest safety check failed; nothing was sent.");
   alternativeRuns.set(input.label, { input, result });
+  card.querySelector(".tool-stage")!.textContent = `done in ${((Date.now() - started) / 1000).toFixed(1)} s`;
+  if (lastResult) card.querySelector(".tool-compare")!.innerHTML = `<div class="rule" style="margin:.4rem 0 .2rem">Compared with the model under review</div>${compareRuns(lastResult, result)}`;
   return digest;
 }
 
@@ -546,6 +616,7 @@ async function evaluatorTurn(userText: string, opening: boolean) {
     if (!digest || !digestLooksSafe(digest)) { evalStatus("Digest safety check failed; nothing was sent."); return; }
     evalSession = { messages: [], digest };
     $("eval-transcript").innerHTML = "";
+    alternativeCount = 0;
     evalUsage.input = evalUsage.output = evalUsage.cacheRead = evalUsage.cacheWrite = 0;
   }
   const content = opening ? m.openingMessage(evalSession.digest, userText || undefined) : userText;
@@ -566,8 +637,12 @@ async function evaluatorTurn(userText: string, opening: boolean) {
   let text = "";
   const flush = () => { if (bubble) bubble.querySelector(".body")!.innerHTML = mdToHtml(text); };
   try {
+    if (opening) appendTranscript(`<div class="who">How this works</div><p class="note" style="margin:0">Claude reads the aggregate results first (this can take a minute), then usually tests a few alternative specifications on your data. Each test appears below as a numbered card while it runs here in your browser; your results above are not changed. The review follows when the tests are done.</p>`, "user");
+    setWorking("Claude is reading your results");
     await m.runTurn(client, evalSession, content, (input) => {
-      const card = appendTranscript(`<div class="who">Ran on your data</div><div class="tool-head"><strong>${esc(input.label)}</strong> <span class="tool-stage note">starting…</span></div><details><summary>SEMinR code</summary><pre class="code"><code>${esc(input.code)}</code></pre></details><div class="tool-actions"></div>`, "tool");
+      alternativeCount++;
+      setWorking(`Testing alternative ${alternativeCount}: ${input.label}`);
+      const card = appendTranscript(`<div class="who">Alternative ${alternativeCount} · run on your data at Claude's request</div><div class="tool-head"><strong>${esc(input.label)}</strong> <span class="tool-stage note">starting…</span></div><div class="tool-compare"></div><details><summary>SEMinR code Claude asked to run</summary><pre class="code"><code>${esc(input.code)}</code></pre></details><div class="tool-actions"></div>`, "tool");
       return runModelForAssistant(input, card).then((d) => {
         card.querySelector(".tool-stage")!.textContent = "done";
         const actions = card.querySelector(".tool-actions")!;
@@ -583,9 +658,10 @@ async function evaluatorTurn(userText: string, opening: boolean) {
         if (!bubble) bubble = appendTranscript(`<div class="who">Claude</div><div class="body"></div>`, "assistant");
         text += delta;
         flush();
+        setWorking("Claude is writing");
       },
-      onToolStart: () => { evalStatus("Running an alternative model on your data…"); },
-      onToolEnd: (call) => { evalStatus(call.ok ? `Done: ${call.summary}. Claude is reading it…` : `Run failed: ${call.summary}`); },
+      onToolStart: () => { evalStatus(""); },
+      onToolEnd: (call) => { evalStatus(call.ok ? "" : `Run failed: ${call.summary}`); setWorking(call.ok ? "Claude is reading the alternative's results" : "Claude is continuing"); },
       onUsage: (u) => {
         evalUsage.input += u.input; evalUsage.output += u.output; evalUsage.cacheRead += u.cacheRead; evalUsage.cacheWrite += u.cacheWrite;
         $("eval-usage").textContent = `Tokens this session: ${(evalUsage.input + evalUsage.cacheRead + evalUsage.cacheWrite).toLocaleString()} in (${evalUsage.cacheRead.toLocaleString()} from cache), ${evalUsage.output.toLocaleString()} out.`;
@@ -595,6 +671,7 @@ async function evaluatorTurn(userText: string, opening: boolean) {
   } catch (err) {
     evalStatus(m.describeError(err));
   } finally {
+    setWorking(null);
     evalBusy = false;
     evalAbort = null;
     $("eval-stop").classList.add("hidden");

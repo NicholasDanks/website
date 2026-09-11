@@ -285,6 +285,11 @@ const toggle = "inline-flex items-center gap-2 text-sm font-medium text-surface-
         <button id="eval-stop" type="button" class="hidden text-sm font-medium text-red-700 dark:text-red-300 underline">Stop</button>
         <span id="eval-status" class="text-xs text-surface-500 dark:text-surface-400"></span>
       </div>
+      <div id="eval-working" class="hidden mb-3 flex items-center gap-3 p-3 rounded-lg border border-accent-300 dark:border-accent-700 bg-white dark:bg-surface-900 text-sm">
+        <span class="inline-block w-4 h-4 rounded-full border-2 border-accent-600 border-t-transparent animate-spin" aria-hidden="true"></span>
+        <span class="phase font-medium text-surface-800 dark:text-surface-200">Working…</span>
+        <span class="elapsed ml-auto font-mono text-xs text-surface-500 dark:text-surface-400"></span>
+      </div>
       <pre id="eval-digest" class="hidden text-xs p-3 mb-3 rounded-lg border border-surface-300 dark:border-surface-700 bg-white dark:bg-surface-950 text-surface-800 dark:text-surface-200 max-h-96 overflow-auto whitespace-pre-wrap"></pre>
 
       <div id="eval-transcript" class="report space-y-4 mb-4"></div>

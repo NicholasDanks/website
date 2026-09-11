@@ -12,6 +12,8 @@ import path from "node:path";
 const toml = fs.readFileSync("netlify.toml", "utf8");
 const headers = {};
 for (const m of toml.matchAll(/^\s{4}([A-Za-z-]+) = "(.*)"$/gm)) headers[m[1]] = m[2];
+// The toml's Cache-Control rules are path-specific (immutable hashed assets); pages must not be cached here.
+headers["Cache-Control"] = "no-store";
 if (process.env.CSP_EXTRA_CONNECT) headers["Content-Security-Policy"] = headers["Content-Security-Policy"].replace("connect-src 'self'", `connect-src 'self' ${process.env.CSP_EXTRA_CONNECT}`);
 delete headers["Strict-Transport-Security"];
 const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".webp": "image/webp", ".woff2": "font/woff2", ".csv": "text/csv", ".ico": "image/x-icon", ".txt": "text/plain", ".xml": "application/xml" };

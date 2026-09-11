@@ -77,6 +77,10 @@ export function generateRScript(parsed: ParsedModel, options: AnalysisOptions, d
     "model_summary$validity$htmt",
     "model_summary$fSquare",
     "plot(model)",
+    "",
+    "# Ch. 4.2 unidimensionality (psych + paran), Ch. 5.3.1 redundancy analysis and",
+    "# Ch. 8.2 effect sizes follow the chapter demo scripts shipped with seminrExtras:",
+    "#   demo(package = \"seminrExtras\")",
   );
   if (options.bootstrap.enabled) {
     lines.push(

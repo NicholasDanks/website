@@ -287,21 +287,29 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
     let mediationHtml = "";
     if (med && med.specific.length) {
       const sigChains = med.specific.filter((e) => e.bootstrapP < alpha);
+      const upsLabel = (u: number) => (!Number.isFinite(u) ? "" : u >= 0.09 ? "large" : u >= 0.04 ? "medium" : u >= 0.01 ? "small" : "negligible");
       const medRows = (xs: typeof med.specific) => xs.map((e) => [
         `<span class="nowrap">${esc(e.path)}</span>`, est(e.originalEst, e.bootstrapP < alpha), pfmt(e.bootstrapP), `<span class="nowrap">[${fmt(e.ciLower)}, ${fmt(e.ciUpper)}]</span>`,
-        Number.isFinite(e.directEst) ? est(e.directEst, e.directP < alpha) : '<span class="rule">no direct path</span>', Number.isFinite(e.directP) ? pfmt(e.directP) : "",
-        e.type === "no effect" ? `<span class="ns">${e.type}</span>` : e.type,
+        `${fmt(e.upsilon)} <span class="rule">${upsLabel(e.upsilon)}</span>`,
+        Number.isFinite(e.directEst) ? est(e.directEst, e.directP < alpha) : '<span class="rule">not in model</span>', Number.isFinite(e.directP) ? pfmt(e.directP) : "",
+        /not in model|no effect/.test(e.type) ? `<span class="ns">${e.type}</span>` : e.type,
       ]);
-      const medHeaders = ["Indirect path", "Indirect effect", "p", ciLabel, "Direct effect", "p", "Mediation type"];
+      const medHeaders = ["Indirect path", "Indirect effect", "p", ciLabel, "υ <span class='rule'>0.01 / 0.04 / 0.09</span>", "Direct effect", "p", "Mediation type"];
       mediationHtml = [
         h3("Mediation"),
         sigChains.length
-          ? rowsTable(medHeaders, medRows(sigChains), { numeric: [false, true, true, false, true, true, false] })
+          ? rowsTable(medHeaders, medRows(sigChains), { numeric: [false, true, true, false, true, true, true, false] })
           : note("No specific indirect effect is significant at α = " + alpha + "."),
-        note(`Every chain the structural model contains was tested by bootstrapping the product of its path coefficients; ${sigChains.length} of ${med.specific.length} are significant and shown above. Types follow Zhao, Lynch &amp; Chen (2010): complementary (direct and indirect significant, same sign), competitive (opposite signs), indirect-only, direct-only.`),
-        med.specific.length > sigChains.length ? details(`All ${med.specific.length} indirect paths`, rowsTable(medHeaders, medRows(med.specific), { numeric: [false, true, true, false, true, true, false] })) : "",
+        note(`Every chain the structural model contains was tested by bootstrapping the product of its path coefficients; ${sigChains.length} of ${med.specific.length} are significant and shown above. υ is the product of the squared path coefficients (Ch. 8.2; 0.01 small, 0.04 medium, 0.09 large). Types follow Zhao, Lynch &amp; Chen (2010) and are only assigned when the competing direct path is in the model; otherwise the row says so, because full vs partial mediation cannot be judged without it.`),
+        med.specific.length > sigChains.length ? details(`All ${med.specific.length} indirect paths`, rowsTable(medHeaders, medRows(med.specific), { numeric: [false, true, true, false, true, true, true, false] })) : "",
+        r.moderatedMediation && r.moderatedMediation.length ? h4("Index of moderated mediation (Ch. 8.3)") : "",
+        r.moderatedMediation && r.moderatedMediation.length ? rowsTable(["Antecedent → mediator × moderator → outcome", "Index (p1 × p5)", ciLabel, "p"], r.moderatedMediation.map((m) => [`<span class="nowrap">${esc(m.antecedent)} → ${esc(m.mediator)} × ${esc(m.moderator)} → ${esc(m.outcome)}</span>`, est(m.index, m.p < alpha), `<span class="nowrap">[${fmt(m.ciLower)}, ${fmt(m.ciUpper)}]</span>`, pfmt(m.p)]), { numeric: [false, true, false, true] }) : "",
+        r.moderatedMediation && r.moderatedMediation.length ? note("The product of the antecedent → mediator path and the interaction → outcome path, bootstrapped: a significant index means the indirect effect depends on the moderator (Hayes, 2015).") : "",
       ].join("");
     }
+    const slopesHtml = r.slopes.length
+      ? [h3("Moderation: simple slopes (Ch. 7.2)"), ...r.slopes.map((sp) => `<h4>${esc(sp.iv)} → ${esc(sp.dv)} at −1 SD, mean and +1 SD of ${esc(sp.moderator)}</h4><div class="diagram">${sp.svg}</div>`), note("The interaction term's path coefficient and f² are in the table above; the plot shows how the slope of the focal relationship changes with the moderator, as seminr's <code>slope_analysis()</code>.")].join("")
+      : "";
 
     out.push({
       id: "structural",
@@ -318,6 +326,7 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
         note("R² rules of thumb (0.25 weak, 0.50 moderate, 0.75 substantial) are field-dependent; in consumer research 0.20 can be high. Q²predict comes from PLSpredict below."),
         h3("Collinearity of predictors"),
         rowsTable(["Predictor → outcome", "VIF <span class='rule'>&lt; 3 ideal, &lt; 5 max</span>"], vifRows, { rowClass: (i) => vifGate(Number(vifRows[i][1])) }),
+        slopesHtml,
         mediationHtml,
         boot ? details("Total effects (direct + indirect)", matrixTable(boot.bootstrappedTotalPaths, { corner: "Path", auditCols: ["Bootstrap Mean", "Bootstrap SD", "T Stat."], colDigits: { "Bootstrap P Val": 3, "T Stat.": 2 } }) + reg("bootTotal", boot.bootstrappedTotalPaths)) : details("Total effects (point estimates)", matrixTable(s.totalEffects, { corner: "", dropEmptyRows: true })),
         details("f² matrix", matrixTable(s.fSquare, { corner: "", dropEmptyRows: true }) + tsvButton("fSquare")),
@@ -394,9 +403,10 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
 
     // HTMT
     const htmtM = s.validity.htmt;
-    const bh = boot?.bootstrappedHtmt ?? null;
+    const bh = boot?.bootstrappedHtmt90 ?? boot?.bootstrappedHtmt ?? null;
+    const reflectiveNames = new Set(r.model.constructs.filter((c) => c.class === "reflective" && c.items.length > 1).map((c) => c.name));
     const htmtPairs = bh
-      ? bh.rows.map((label) => {
+      ? bh.rows.filter((label) => label.split("  ->  ").every((n) => reflectiveNames.has(n))).map((label) => {
           const v = cell(bh, label, "Original Est.");
           const hi = cell(bh, label, bh.cols[5]);
           const cls = hi >= 1 ? "gate-fail" : v >= 0.9 ? "gate-fail" : v >= 0.85 || hi >= 0.9 ? "gate-warn" : "";
@@ -418,10 +428,22 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
         refTable ? h3("Reflective and mode A constructs") : "",
         refTable,
         refTable ? tsvButton("reliability") + tsvButton("loadings") : "",
+        r.unidimensionality.length ? h4("Unidimensionality (Ch. 4.2)") : "",
+        r.unidimensionality.length ? rowsTable(
+          ["Construct", "Eigenvalues (PC1, PC2, …)", "Adjusted by parallel analysis <span class='rule'>only PC1 &gt; 1</span>", "Revelle's β", "α", "Verdict"],
+          r.unidimensionality.map((u) => [`<strong>${esc(u.construct)}</strong>`, u.eigenvalues.map((e) => fmt(e, 2)).join(", "), u.adjustedEigenvalues.map((e) => fmt(e, 2)).join(", "), u.revelleBeta === null ? "" : fmt(u.revelleBeta, 2), fmt(u.alpha, 2), u.unidimensional ? "one dimension" : `<span class="gate-warn">${u.adjustedEigenvalues.filter((e) => e > 1).length} dimensions</span>`]),
+          { numeric: [false, false, false, true, true, false], rowClass: (i) => (r.unidimensionality[i].unidimensional ? "" : "gate-warn") },
+        ) : "",
+        r.unidimensionality.length ? note("Horn's parallel analysis (95th centile, 500 random datasets) subtracts the eigenvalue bias expected from noise; a construct is unidimensional when only the first adjusted eigenvalue exceeds 1. Revelle's β is the worst split-half reliability over every split (psych's definition, as the book's iclust call) and should sit close to α; a β far below α suggests the items form more than one cluster.") : "",
         refTable ? note("Loadings at or above 0.708 give indicator reliability of at least 0.50. Reliability (α, ρ<sub>A</sub>, ρ<sub>C</sub>) should fall between 0.70 and 0.95; above 0.95 the indicators are redundant. AVE at or above 0.50 establishes convergent validity. ρ<sub>ε</sub> is the correlation of the construct score with the first principal component of its own indicators; below 0.70 the inner weighting has displaced the score (interpretational confounding). Single-item constructs have no reliability statistics by construction.") : "",
         forTable ? h3("Formative and unit-weight constructs") : "",
         forTable,
         forTable ? tsvButton("weights") : "",
+        formative.length ? h4("Convergent validity: redundancy analysis (Ch. 5.3.1)") : "",
+        formative.length ? (r.redundancy.length
+          ? rowsTable(["Construct", "Global item", "Path <span class='rule'>≥ 0.70</span>", "R² <span class='rule'>≥ 0.50</span>"], r.redundancy.map((x) => [`<strong>${esc(x.construct)}</strong>`, `<span class="mono">${esc(x.globalItem)}</span>`, `<span class="${x.path < 0.7 ? "gate-fail" : ""}">${fmt(x.path)}</span>`, fmt(x.rSquared)]), { numeric: [false, false, true, true], rowClass: (i) => (r.redundancy[i].path < 0.7 ? "gate-fail" : "") })
+          : note(`No global single-item measure was found for ${formative.map((c) => c.name).join(", ")}. Name one <code>construct_global</code> (as the textbook's <code>qual_global</code>) and the redundancy analysis runs automatically.`)) : "",
+        formative.length && r.redundancy.length && r.redundancy.length < formative.length ? note(`No global item found for ${formative.filter((c) => !r.redundancy.some((x) => x.construct === c.name)).map((c) => c.name).join(", ")}.`) : "",
         forTable ? note("Read the weight's significance first. A non-significant weight with a loading of 0.50 or more still marks an absolutely important indicator (keep it); below 0.50, removal needs a content-validity argument. VIF above 5 destabilises the weights. ρ<sub>ε</sub> is the only reliability diagnostic available for a mode B composite. Convergent validity (redundancy analysis against a global item) cannot be assessed without that extra item.") : "",
         boot ? details("Bootstrapped loadings", matrixTable(boot.bootstrappedLoadings, { corner: "Indicator → construct", auditCols: ["Bootstrap Mean", "Bootstrap SD", "T Stat."], colDigits: { "Bootstrap P Val": 3, "T Stat.": 2 } })) : "",
         details("Cross-loadings", matrixTable(s.validity.crossLoadings, { corner: "Indicator" }) + reg("crossLoadings", s.validity.crossLoadings) + note("Each indicator should load highest on its own construct.")),
@@ -430,10 +452,10 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
         matrixTable(htmtM, { corner: "", cellClass: (_r, _c, v) => (v >= 0.9 ? "gate-fail" : v >= 0.85 ? "gate-warn" : "") }),
         reg("htmt", htmtM),
         `<p class="note legend"><span class="sw gate-warn"></span> 0.85 – 0.90: acceptable only for conceptually similar constructs &nbsp; <span class="sw gate-fail"></span> ≥ 0.90: discriminant validity in doubt. Formative, single-item and interaction constructs are shown for reference but not assessed.</p>`,
-        htmtPairs.length ? h4(`HTMT with bootstrap ${ciLabel}`) : "",
-        htmtPairs.length ? rowsTable(["Pair", "HTMT <span class='rule'>&lt; 0.85 / 0.90</span>", `${ciLabel} <span class='rule'>upper bound below the threshold</span>`], htmtPairs.map((x) => x.row), { numeric: [false, true, false], rowClass: (i) => htmtPairs[i].cls }) : "",
+        htmtPairs.length ? h4("HTMT inference for reflective pairs (bootstrap, α = 0.10)") : "",
+        htmtPairs.length ? rowsTable(["Pair", "HTMT <span class='rule'>&lt; 0.85 / 0.90</span>", "90% interval <span class='rule'>95% one-sided upper bound below the threshold</span>"], htmtPairs.map((x) => x.row), { numeric: [false, true, false], rowClass: (i) => htmtPairs[i].cls }) : "",
         htmtPairs.length ? reg("bootHtmt", bh!) : "",
-        htmtPairs.length ? note("HTMT inference: the upper bound of the interval should stay below the chosen threshold (Ringle et al., 2023). The engine computes the original HTMT; HTMT2 (Roemer, Schuberth &amp; Henseler, 2021), the criterion for unequal loadings, is not available here.") : "",
+        htmtPairs.length ? note("As in the textbook (Ch. 4.6), the bootstrap summary for HTMT uses α = 0.10, so the upper bound is the 95% one-sided limit that should stay below the threshold (Ringle et al., 2023). Only pairs of reflective multi-item constructs are tested; HTMT is undefined for formative and single-item constructs. The engine computes the original HTMT; HTMT2 (Roemer, Schuberth &amp; Henseler, 2021), the criterion for unequal loadings, is not available here.") : "",
         details("Fornell–Larcker criterion", matrixTable(s.validity.flCriteria, { corner: "" }) + reg("flCriteria", s.validity.flCriteria) + note("Square roots of AVE on the diagonal, construct correlations below it. Legacy criterion; rely on HTMT.")),
 
         cg ? h3("Congruence in the nomological network") : "",
@@ -645,6 +667,8 @@ export const REPORT_CSS = `
 .report .msg .body h3,.report .msg .body h4,.report .msg .body h5{margin:.9rem 0 .3rem;font-size:.95rem}
 .report .msg .tool-head{margin-bottom:.25rem}
 .report .msg details{margin:.4rem 0}
+.report .msg ul.compare{margin:.2rem 0 .4rem 1.1rem;font-size:.85rem}
+.report .msg .body .tblwrap{margin:.5rem 0}
 @media (max-width:640px){.report .v-row{flex-direction:column;gap:.2rem}.report .v-label{flex:none}}
 @media print{.report button.copy{display:none}.report details{border:none;padding:0}.report details>summary{display:none}.report details:not([open])>*:not(summary){display:block}}
 `;

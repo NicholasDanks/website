@@ -208,7 +208,7 @@ console.log("\nBootstrap and derived stages");
     const sd = Math.sqrt(y.reduce((a, b) => a + (b - m) ** 2, 0) / y.length);
     return Math.abs(sd - res.predict.naiveRmse[it]) < 1e-9;
   })());
-  check("mediation chains carry a Zhao typology", res.mediation.specific.every((e) => ["complementary", "competitive", "indirect-only", "direct-only", "no effect"].includes(e.type)));
+  check("mediation chains carry a Zhao typology", res.mediation.specific.every((e) => ["complementary", "competitive", "indirect-only", "direct-only", "no effect", "indirect (direct path not in model)", "none (direct path not in model)"].includes(e.type)));
   check("evaluator digest carries aggregates only", await (async () => {
     const { buildDigest, digestLooksSafe } = await import("../src/lib/seminr/digest.ts");
     const cols = parseDataText(dataText).data.columns;
@@ -237,6 +237,18 @@ console.log("\nBootstrap and derived stages");
     ]) { try { parseSeminrModel(src); errs.push("no error"); } catch (e) { errs.push(e.message); } }
     return /too long/.test(errs[0]) && /too large/.test(errs[1]) && /limit is 5000/.test(errs[2]);
   })());
+  check("textbook Ch. 8.2 upsilon and Ch. 5.3.1 redundancy paths match R", (() => {
+    const fx = Object.fromEntries(fs.readFileSync(path.join(root, "test", "fixtures-r-textbook.txt"), "utf8").trim().split("\n").map((l) => { const [k, ...v] = l.trim().split(" "); return [k + (k === "REDUNDANCY" || k === "EIGEN" ? "_" + v.shift() : ""), v.map(Number)]; }));
+    const like = res.mediation.specific.find((e) => e.path === "LIKE -> CUSA -> CUSL");
+    const comp = res.mediation.specific.find((e) => e.path === "COMP -> CUSA -> CUSL");
+    const okUps = Math.abs(like.upsilon - fx.UPSILON_LIKE[0]) < 1e-9 && Math.abs(comp.upsilon - fx.UPSILON_COMP[0]) < 1e-9;
+    const okRed = ["QUAL", "PERF", "CSOR", "ATTR"].every((c) => { const r = res.redundancy.find((x) => x.construct === c); return r && r.globalItem === c.toLowerCase() + "_global" && Math.abs(r.path - fx["REDUNDANCY_" + c][0]) < 1e-9; });
+    const okEig = ["COMP", "LIKE", "CUSL"].every((c) => { const u = res.unidimensionality.find((x) => x.construct === c); return u && u.eigenvalues.every((e, k) => Math.abs(e - fx["EIGEN_" + c][k]) < 1e-8) && u.unidimensional && u.revelleBeta > 0.6 && u.revelleBeta <= u.alpha + 1e-9; });
+    return okUps && okRed && okEig;
+  })());
+  check("Revelle's beta reproduces the textbook's psych::iclust values (0.70, 0.81, 0.78)", [["COMP", 0.70], ["LIKE", 0.81], ["CUSL", 0.78]].every(([c, b]) => Math.abs(res.unidimensionality.find((u) => u.construct === c).revelleBeta - b) < 0.006));
+  check("mediation types honour a missing direct path", res.mediation.specific.filter((e) => !Number.isFinite(e.directEst)).every((e) => /direct path not in model/.test(e.type)));
+  check("HTMT gate uses the textbook's alpha = 0.10 interval", res.bootstrap.bootstrappedHtmt90.cols.includes("95% CI") && res.bootstrap.bootstrappedHtmt90.cols.includes("5% CI"));
   check("assessment splits gates from findings",
     res.assessment.some((a) => a.kind === "gate") && res.assessment.some((a) => a.kind === "finding") && res.assessment.filter((a) => a.kind === "finding").every((a) => a.status === "info"));
 }

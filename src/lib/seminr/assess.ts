@@ -89,7 +89,9 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
   const alpha = r.input.options.bootstrap.alpha;
   const bootPaths = boot?.bootstrappedPaths;
   const bootWeights = boot?.bootstrappedWeights;
-  const bootHtmt = boot?.bootstrappedHtmt;
+  // The textbook inspects the HTMT bootstrap at alpha = 0.10 (Ch. 4.6): the 95% one-sided upper bound.
+  const bootHtmt = boot?.bootstrappedHtmt90 ?? boot?.bootstrappedHtmt;
+  const htmtHiCol = bootHtmt?.cols[5] ?? "";
   const ciLo = bootPaths?.cols[4] ?? "";
   const ciHi = bootPaths?.cols[5] ?? "";
   const ciLabel = `${(100 * (1 - alpha)).toFixed(0)}%`;
@@ -183,6 +185,17 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
     }
   }
 
+  // --- unidimensionality (Ch. 4.2) ----------------------------------------------
+  for (const u of r.unidimensionality) {
+    const ev = u.adjustedEigenvalues;
+    gate({
+      section: "reflective", status: u.unidimensional ? "ok" : "warn", subject: u.construct, criterion: "Unidimensionality (parallel analysis)",
+      value: ev[0], threshold: "only the first adjusted eigenvalue > 1",
+      message: `Adjusted eigenvalues ${ev.map(f3).join(", ")} (raw ${u.eigenvalues.map(f3).join(", ")}): ${u.unidimensional ? "one dimension retained." : `${ev.filter((e) => e > 1).length} dimensions retained — the indicators may not measure a single construct.`}${u.revelleBeta !== null ? ` Revelle's β = ${f3(u.revelleBeta)} vs α = ${f3(u.alpha)}${u.revelleBeta < 0.7 || u.alpha - u.revelleBeta > 0.15 ? "; a β well below α points to a lumpy item set" : ""}.` : ""}`,
+      source: `${HAIR}, Ch. 4.2; Horn (1965); Revelle (1979)`,
+    });
+  }
+
   // --- formative measurement ---------------------------------------------------
   const formative = constructs.filter((c) => c.class === "formative" || c.class === "unit-weights" || (c.class === "higher-order" && /mode B/.test(c.label)));
   for (const c of formative) {
@@ -227,12 +240,22 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
         source: IC,
       });
     }
-    gate({
-      section: "formative", status: "info", subject: c.name, criterion: "Convergent validity (redundancy analysis)",
-      value: null, threshold: "path to a global single-item measure ≥ 0.70",
-      message: `Not assessed here: redundancy analysis needs a separate global measure of ${c.name} regressed on the composite. A single global item is sufficient (Cheah et al., 2018).`,
-      source: `${HAIR}, Ch. 5`,
-    });
+    const red = r.redundancy.find((x) => x.construct === c.name);
+    if (red) {
+      gate({
+        section: "formative", status: red.path >= 0.7 ? "ok" : "fail", subject: c.name, criterion: "Convergent validity (redundancy analysis)",
+        value: red.path, threshold: "path to the global single-item measure ≥ 0.70 (R² ≥ 0.50)",
+        message: `${c.name} → ${red.globalItem}: path ${f3(red.path)}, R² ${f3(red.rSquared)}. ${red.path >= 0.7 ? "The formative composite captures the concept its global item measures." : "The formative indicators do not adequately capture the concept; review content coverage."}`,
+        source: `${HAIR}, Ch. 5.3.1; Cheah et al. (2018)`,
+      });
+    } else {
+      gate({
+        section: "formative", status: "info", subject: c.name, criterion: "Convergent validity (redundancy analysis)",
+        value: null, threshold: "path to a global single-item measure ≥ 0.70",
+        message: `Not assessed: no global single-item measure of ${c.name} was found in the data (the app looks for a column named like ${c.name.toLowerCase()}_global). Add one to run the redundancy analysis.`,
+        source: `${HAIR}, Ch. 5.3.1; Cheah et al. (2018)`,
+      });
+    }
   }
 
   // --- discriminant validity ---------------------------------------------------
@@ -245,7 +268,7 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
       if (!Number.isFinite(v)) v = cell(htmt, y, x);
       if (!Number.isFinite(v)) continue;
       const br = bootRow(bootHtmt, `${x}  ->  ${y}`) ?? bootRow(bootHtmt, `${y}  ->  ${x}`);
-      const upper = br ? br[ciHi] : NaN;
+      const upper = br ? br[htmtHiCol] : NaN;
       let status: AssessmentStatus = v < 0.85 ? "ok" : v < 0.9 ? "warn" : "fail";
       let message = v < 0.85
         ? `HTMT = ${f3(v)}.`
@@ -253,14 +276,14 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
           ? `HTMT = ${f3(v)} is between 0.85 and 0.90: acceptable only if ${x} and ${y} are conceptually similar.`
           : `HTMT = ${f3(v)} is at or above 0.90: discriminant validity is in doubt.`;
       if (Number.isFinite(upper)) {
-        if (upper >= 1) { status = "fail"; message += ` The ${ciLabel} CI upper bound ${f3(upper)} includes 1.`; }
-        else if (upper >= 0.9 && status === "ok") { status = "warn"; message += ` The ${ciLabel} CI upper bound is ${f3(upper)} (≥ 0.90).`; }
-        else message += ` ${ciLabel} CI upper bound ${f3(upper)}.`;
+        if (upper >= 1) { status = "fail"; message += ` The 95% one-sided upper bound ${f3(upper)} includes 1.`; }
+        else if (upper >= 0.9 && status === "ok") { status = "warn"; message += ` The 95% one-sided upper bound is ${f3(upper)} (≥ 0.90).`; }
+        else message += ` 95% one-sided upper bound ${f3(upper)}.`;
       }
       gate({
         section: "discriminant", status, subject: `${x} ↔ ${y}`, criterion: "HTMT",
-        value: v, threshold: "< 0.85 (distinct) or < 0.90 (similar); CI upper bound below the threshold",
-        message, source: `${HAIR}, Ch. 4; Henseler, Ringle & Sarstedt (2015); Ringle et al. (2023)`,
+        value: v, threshold: "< 0.85 (distinct) or < 0.90 (similar); 95% one-sided upper bound below the threshold",
+        message, source: `${HAIR}, Ch. 4.6; Henseler, Ringle & Sarstedt (2015); Ringle et al. (2023)`,
       });
     }
   }
@@ -335,13 +358,23 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
   if (r.mediation && !isStageError(r.mediation)) {
     for (const e of r.mediation.specific) {
       const sig = e.bootstrapP < alpha;
+      const ups = Number.isFinite(e.upsilon) ? ` υ = ${f3(e.upsilon)} (${e.upsilon >= 0.09 ? "large" : e.upsilon >= 0.04 ? "medium" : e.upsilon >= 0.01 ? "small" : "negligible"}).` : "";
       finding({
         section: "mediation", subject: e.path, criterion: "Specific indirect effect",
-        value: e.originalEst, threshold: `${ciLabel} percentile CI excludes 0; typology by direct × indirect significance`,
-        message: `Indirect effect ${f3(e.originalEst)}, ${ciLabel} CI [${f3(e.ciLower)}, ${f3(e.ciUpper)}], p = ${f3(e.bootstrapP)}${sig ? "" : " — not significant"}; direct effect ${Number.isFinite(e.directEst) ? `${f3(e.directEst)} (p = ${f3(e.directP)})` : "not specified"}: ${e.type} mediation.`,
-        source: `${ZHAO}; Nitzl, Roldán & Cepeda (2016)`,
+        value: e.originalEst, threshold: `${ciLabel} percentile CI excludes 0; typology by direct × indirect significance; υ 0.01 / 0.04 / 0.09`,
+        message: `Indirect effect ${f3(e.originalEst)}, ${ciLabel} CI [${f3(e.ciLower)}, ${f3(e.ciUpper)}], p = ${f3(e.bootstrapP)}${sig ? "" : " — not significant"}; direct effect ${Number.isFinite(e.directEst) ? `${f3(e.directEst)} (p = ${f3(e.directP)})` : "not in the model, so full vs partial mediation cannot be judged"}: ${e.type}.${ups}`,
+        source: `${ZHAO}; Nitzl, Roldán & Cepeda (2016); Lachowicz, Preacher & Kelley (2018); ${HAIR}, Ch. 8`,
       });
     }
+  }
+
+  for (const mm of r.moderatedMediation ?? []) {
+    finding({
+      section: "mediation", subject: `${mm.antecedent} → ${mm.mediator} × ${mm.moderator} → ${mm.outcome}`, criterion: "Index of moderated mediation",
+      value: mm.index, threshold: `${ciLabel} percentile CI of p1 × p5 excludes 0`,
+      message: `Index ${f3(mm.index)}, ${ciLabel} CI [${f3(mm.ciLower)}, ${f3(mm.ciUpper)}], p = ${f3(mm.p)}: the indirect effect of ${mm.antecedent} on ${mm.outcome} through ${mm.mediator} ${mm.p < alpha ? "depends on" : "does not significantly depend on"} ${mm.moderator}.`,
+      source: `${HAIR}, Ch. 8.3; Hayes (2015)`,
+    });
   }
 
   // --- prediction ---------------------------------------------------------------
