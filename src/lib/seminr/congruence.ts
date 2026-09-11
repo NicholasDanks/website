@@ -6,9 +6,10 @@
  * rows with the measurement weights frozen, which is only an approximation.
  *
  * The reliability placed on the matrix diagonal is a choice:
- *   - "rhoA" (the shipped default) matches this app's long-standing convention.
+ *   - "rhoA" (the shipped default) is the reliability appropriate to composite
+ *     scores (Dijkstra & Henseler, 2015).
  *   - "rhoC" reproduces the published congruence_test() exactly. Validated
- *     against R 4.6.0 in test/congruence-model-parity.mjs, which is what proves
+ *     against R 4.6.0 in test/congruence-parity.mjs, which is what proves
  *     the machinery — rhoA is the same code path with a different diagonal.
  *
  * Bootstrap draws come from rrng.ts, which reproduces R's Mersenne-Twister and
@@ -17,8 +18,6 @@
  */
 
 import {
-  estimatePls,
-  meanReplacement,
   rerun,
   rhoA as rhoAOf,
   reliabilityTable,
@@ -300,4 +299,3 @@ export function congruenceFromModel(
   };
 }
 
-export { estimatePls, meanReplacement };

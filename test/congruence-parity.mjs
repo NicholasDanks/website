@@ -21,14 +21,26 @@
  *   congruence_test(m, nboot=200, seed=123, alpha=0.10)
  * stored in test/fixtures-r-congruence-test.txt
  *
- * Run:  npx tsx test/congruence-model-parity.mjs
+ * Run:  npx tsx test/congruence-parity.mjs
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runIndicatorRoute } from "../src/lib/congruence/runIndicator.ts";
-import { parseSeminrModel } from "../src/lib/congruence/parseSeminr.ts";
+import { parseSeminrModel, requiredItems } from "../src/lib/seminr/parseSeminr.ts";
+import { parseDataText, selectColumns } from "../src/lib/seminr/data.ts";
+import { estimateParsedModel } from "../src/lib/seminr/specify.ts";
+import { congruenceFromModel } from "../src/lib/seminr/congruence.ts";
+
+/** The old indicator route: code + data text -> estimated model -> congruence test. */
+function runIndicatorRoute({ code, dataText, options }) {
+  const parsed = parseSeminrModel(code);
+  const data = selectColumns(parseDataText(dataText).data, requiredItems(parsed));
+  const model = estimateParsedModel(parsed, data, {
+    innerWeights: "path_weighting", missing: "mean_replacement", missingValue: -99,
+  });
+  return congruenceFromModel(model, data, options);
+}
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 let failures = 0;
@@ -50,14 +62,14 @@ corp_rep_sm <- relationships(
 console.log("\nSEMinR model parser");
 {
   const m = parseSeminrModel(CODE);
-  check("4 constructs parsed", m.constructs.length === 4);
-  check("single_item handled", m.constructs.find((c) => c.name === "CUSA").items.length === 1);
+  check("4 constructs parsed", m.measurement.length === 4);
+  check("single_item handled", m.measurement.find((c) => c.name === "CUSA").items.length === 1);
   check("3 path blocks", m.paths.length === 2 || m.paths.length === 3, String(m.paths.length));
 
   const errs = [
     ['constructs(composite("A", multi_items("a_",1:3)))', /relationships/],
     ['constructs(composite("A", multi_items("a_",1:3)), composite("B", multi_items("b_",1:3)))\nrelationships(paths(from="A", to="Z"))', /never defined/],
-    ['constructs(composite("A", multi_items("a_",1:3)), composite("B", multi_items("b_",1:3)))\nrelationships(paths(from="A",to="B"))\ninteraction_term(iv="A", moderator="B")', /not supported/],
+    ['constructs(composite("A", multi_items("a_",1:3)), composite("B", multi_items("b_",1:3)), interaction_term(iv="A", moderator="Q"))\nrelationships(paths(from="A",to="B"))', /not a defined construct/],
   ];
   errs.forEach(([src, re], i) => {
     let msg = "";
@@ -68,7 +80,7 @@ console.log("\nSEMinR model parser");
 
 console.log("\nIndicator route vs R congruence_test() (rho_C, nboot 200, seed 123, alpha 0.10)");
 {
-  const dataText = fs.readFileSync(path.join(root, "public", "congruence-demo", "corp_rep_data.csv"), "utf8");
+  const dataText = fs.readFileSync(path.join(root, "public", "seminr-demo", "corp_rep_data.csv"), "utf8");
   const res = runIndicatorRoute({
     code: CODE, dataText,
     options: { nboot: 200, seed: 123, alpha: 0.1, threshold: 1, diagonal: "rhoC" },
@@ -93,7 +105,7 @@ console.log("\nIndicator route vs R congruence_test() (rho_C, nboot 200, seed 12
 
 console.log("\nrho_A default (shipped configuration)");
 {
-  const dataText = fs.readFileSync(path.join(root, "public", "congruence-demo", "corp_rep_data.csv"), "utf8");
+  const dataText = fs.readFileSync(path.join(root, "public", "seminr-demo", "corp_rep_data.csv"), "utf8");
   const res = runIndicatorRoute({
     code: CODE, dataText,
     options: { nboot: 100, seed: 123, alpha: 0.05, threshold: 1, diagonal: "rhoA" },
@@ -111,7 +123,7 @@ console.log("\nreflective() must use PLSc, not composite (regression)");
   // reflective() is a common factor (type "C", Mode A + PLSc disattenuation).
   // Mapping it to composite() silently changes the estimator: COMP -> LIKE
   // would come out 0.9612 instead of 0.9791. Ground truth from R 4.6.0.
-  const dataText = fs.readFileSync(path.join(root, "public", "congruence-demo", "corp_rep_data.csv"), "utf8");
+  const dataText = fs.readFileSync(path.join(root, "public", "seminr-demo", "corp_rep_data.csv"), "utf8");
   const CODE_R = `mm <- constructs(
   reflective("COMP", multi_items("comp_", 1:3)),
   reflective("LIKE", multi_items("like_", 1:3)),
@@ -123,9 +135,9 @@ sm <- relationships(
 
   const parsed = parseSeminrModel(CODE_R);
   check("reflective flag set on reflective() constructs",
-    parsed.constructs.filter((c) => c.reflective).length === 3);
+    parsed.measurement.filter((c) => c.reflective).length === 3);
   check("composite() not flagged reflective",
-    parsed.constructs.find((c) => c.name === "CUSA").reflective === false);
+    parsed.measurement.find((c) => c.name === "CUSA").reflective === false);
 
   let msg = "";
   try {

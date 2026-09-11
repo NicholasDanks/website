@@ -1,0 +1,254 @@
+---
+import PageLayout from "../../layouts/PageLayout.astro";
+import Button from "../../components/shared/Button.astro";
+import Badge from "../../components/shared/Badge.astro";
+
+const box =
+  "w-full font-mono text-xs p-3 rounded-lg border border-surface-300 dark:border-surface-700 bg-surface-50 dark:bg-surface-950 text-surface-900 dark:text-surface-100";
+const field =
+  "mt-1 w-full px-3 py-2 rounded-lg border border-surface-300 dark:border-surface-700 bg-surface-50 dark:bg-surface-950 text-surface-900 dark:text-surface-100";
+const label = "block text-sm text-surface-700 dark:text-surface-300";
+const card =
+  "mb-6 p-6 rounded-xl bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800";
+const toggle = "inline-flex items-center gap-2 text-sm font-medium text-surface-800 dark:text-surface-200";
+---
+
+<PageLayout
+  title="SEMinR in the browser — PLS-SEM estimation — Nicholas P. Danks"
+  description="Estimate, bootstrap, and assess a PLS-SEM model from SEMinR code and your own data, entirely in your browser: reliability, HTMT, path coefficients, mediation, PLSpredict, CVPAT, the congruence test, and a downloadable report. Nothing you paste is transmitted anywhere."
+>
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+    <header class="mb-8">
+      <div class="flex flex-wrap items-center gap-2 mb-4">
+        <Badge label="Web App" variant="primary" />
+        <Badge label="Runs on your computer" variant="accent" />
+        <Badge label="No upload" variant="neutral" />
+      </div>
+      <h1 class="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-surface-50 mb-4">
+        SEMinR in the browser
+      </h1>
+      <p class="text-lg text-surface-600 dark:text-surface-400 leading-relaxed max-w-3xl">
+        Paste the SEMinR model you would run in R and your indicator data. The page
+        estimates the PLS-SEM model, bootstraps it, runs PLSpredict, CVPAT and the
+        congruence test, checks every result against the textbook thresholds, draws the
+        path diagram, and gives you a report, the numbers, and the R script to reproduce
+        it all. No R, no install.
+      </p>
+    </header>
+
+    <!-- Privacy panel -->
+    <section class="mb-10 p-6 rounded-xl border border-accent-200 dark:border-accent-800 bg-accent-50/50 dark:bg-accent-900/20">
+      <h2 class="text-base font-semibold text-surface-900 dark:text-surface-100 mb-3">
+        Your data never leaves your computer
+      </h2>
+      <div class="space-y-3 text-sm text-surface-700 dark:text-surface-300 leading-relaxed">
+        <p>
+          Everything &mdash; estimation, every bootstrap resample, every cross-validation
+          fold &mdash; runs inside your browser on your own machine. There is no upload,
+          no server, no account, and no logging. <strong>Nothing you paste is ever
+          transmitted anywhere.</strong> Once the page has loaded, the only request it can
+          make is for the bundled demo dataset, and only if you press &ldquo;Load demo&rdquo;.
+          Disconnect from the internet and it still works.
+        </p>
+        <p>
+          The engine is the open-source TypeScript port of SEMinR and seminrExtras.
+          Point estimates, the summary tables and PLSpredict reproduce R exactly
+          (PLSpredict includes R's fold shuffle for a given seed). The bootstrap uses
+          R's random number generator too, but seminr draws its resamples on a
+          parallel stream, so intervals agree with R to Monte Carlo error, not digit
+          for digit. The congruence test with rho<sub>C</sub> is bit-identical to
+          <code>seminrExtras::congruence_test()</code>.
+        </p>
+      </div>
+    </section>
+
+    <div class="grid lg:grid-cols-2 gap-6">
+      <section class={card + " lg:mb-0"}>
+        <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
+          <span class="text-accent-600 dark:text-accent-400">1.</span> Indicator data
+        </h2>
+        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
+          One column per item with a header row of item names, one row per case.
+          Comma-, semicolon- or tab-separated, so pasting from Excel, SPSS or SmartPLS
+          works. Extra columns are ignored.
+        </p>
+        <textarea id="data" rows="12" spellcheck="false" class={box}
+          placeholder={"comp_1,comp_2,comp_3,like_1,…\n5,6,5,7,…"}></textarea>
+        <div class="mt-3 flex flex-wrap items-center gap-3">
+          <label class="inline-flex items-center gap-2 text-sm font-medium rounded-lg px-3 py-1.5 bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 cursor-pointer">
+            <input id="file" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" class="sr-only" />
+            Open a file…
+          </label>
+          <span class="text-xs text-surface-500 dark:text-surface-400">Read locally; never uploaded.</span>
+        </div>
+        <p id="data-status" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
+      </section>
+
+      <section class={card + " lg:mb-0"}>
+        <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-2">
+          <span class="text-accent-600 dark:text-accent-400">2.</span> SEMinR model
+        </h2>
+        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
+          The same code you would run in R: <code>constructs()</code> with
+          <code>composite()</code>, <code>reflective()</code>,
+          <code>higher_composite()</code>, <code>interaction_term()</code> and
+          <code>quadratic_term()</code>; <code>relationships()</code> with
+          <code>paths()</code>. Assignments, comments and other lines are ignored.
+        </p>
+        <textarea id="code" rows="12" spellcheck="false" class={box}
+          placeholder={'mm <- constructs(\n  composite("COMP", multi_items("comp_", 1:3)),\n  composite("QUAL", multi_items("qual_", 1:8), weights = mode_B),\n  composite("CUSA", single_item("cusa")))\n\nsm <- relationships(\n  paths(from = "QUAL", to = "COMP"),\n  paths(from = "COMP", to = "CUSA"))'}></textarea>
+        <p id="code-status" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
+      </section>
+    </div>
+
+    <!-- Options -->
+    <section class={card + " mt-6"}>
+      <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-4">
+        <span class="text-accent-600 dark:text-accent-400">3.</span> Options
+      </h2>
+
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <label class={label}>Missing-value code
+          <input id="missing-value" type="text" value="-99" class={field} placeholder="e.g. -99 (blank = none)" />
+        </label>
+        <label class={label}>Missing data
+          <select id="missing" class={field}>
+            <option value="mean_replacement">Mean replacement</option>
+            <option value="na_omit">Drop incomplete cases</option>
+          </select>
+        </label>
+        <label class={label}>Inner weighting scheme
+          <select id="inner-weights" class={field}>
+            <option value="path_weighting">Path weighting</option>
+            <option value="path_factorial">Factorial</option>
+          </select>
+        </label>
+        <label class={label}>Random seed
+          <input id="seed" type="number" value="123" min="1" class={field} />
+        </label>
+      </div>
+
+      <div class="mt-6 grid md:grid-cols-3 gap-6">
+        <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-800">
+          <label class={toggle}><input id="boot-enabled" type="checkbox" checked /> Bootstrap</label>
+          <div class="mt-3 grid grid-cols-2 gap-3">
+            <label class={label}>Resamples
+              <input id="nboot" type="number" value="2000" min="50" max="10000" step="100" class={field} />
+            </label>
+            <label class={label}>Alpha
+              <input id="alpha" type="number" value="0.05" min="0.001" max="0.5" step="0.01" class={field} />
+            </label>
+          </div>
+          <p class="text-xs mt-2 text-surface-500 dark:text-surface-400">
+            Percentile confidence intervals for paths, loadings, weights, HTMT, total and
+            indirect effects. 10,000 for final reporting.
+          </p>
+        </div>
+
+        <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-800">
+          <label class={toggle}><input id="predict-enabled" type="checkbox" checked /> PLSpredict</label>
+          <div class="mt-3 grid grid-cols-2 gap-3">
+            <label class={label}>Folds
+              <input id="folds" type="number" value="10" min="2" max="50" class={field} />
+            </label>
+            <label class={label}>Scheme
+              <select id="technique" class={field}>
+                <option value="predict_DA">Direct antecedents</option>
+                <option value="predict_EA">Earliest antecedents</option>
+              </select>
+            </label>
+          </div>
+          <label class={toggle + " mt-3"}><input id="cvpat-enabled" type="checkbox" checked /> CVPAT</label>
+          <label class={label + " mt-2"}>CVPAT resamples
+            <input id="cvpat-nboot" type="number" value="1000" min="50" max="5000" step="100" class={field} />
+          </label>
+        </div>
+
+        <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-800">
+          <label class={toggle}><input id="congruence-enabled" type="checkbox" checked /> Congruence test</label>
+          <div class="mt-3 grid grid-cols-2 gap-3">
+            <label class={label}>Resamples
+              <input id="congruence-nboot" type="number" value="1000" min="50" max="10000" step="100" class={field} />
+            </label>
+            <label class={label}>Threshold
+              <input id="congruence-threshold" type="number" value="1" min="0.5" max="1" step="0.05" class={field} />
+            </label>
+          </div>
+          <div class="mt-3 text-sm">
+            <span class="text-surface-700 dark:text-surface-300">Matrix diagonal</span>
+            <div class="mt-1 flex flex-wrap gap-4">
+              <label class="inline-flex items-center gap-2">
+                <input type="radio" name="diagonal" value="rhoA" checked />
+                <span>rho<sub>A</sub></span>
+              </label>
+              <label class="inline-flex items-center gap-2">
+                <input type="radio" name="diagonal" value="rhoC" />
+                <span>rho<sub>C</sub> <span class="text-surface-500 dark:text-surface-400">(as <code>congruence_test()</code>)</span></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="flex flex-wrap items-center gap-3 mb-4">
+      <button id="run" type="button"
+        class="inline-flex items-center gap-2 font-semibold rounded-lg px-6 py-3 text-base bg-accent-700 text-white hover:bg-accent-800 shadow-sm hover:shadow-md transition-all disabled:opacity-50">
+        Run the analysis
+      </button>
+      <button id="demo" type="button"
+        class="inline-flex items-center gap-2 font-semibold rounded-lg px-6 py-3 text-base bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 transition-all">
+        Load demo
+      </button>
+      <button id="cancel" type="button"
+        class="hidden inline-flex items-center gap-2 font-medium rounded-lg px-4 py-3 text-sm text-surface-600 dark:text-surface-400 hover:text-red-600">
+        Cancel
+      </button>
+      <span id="elapsed" class="text-xs text-surface-500 dark:text-surface-400"></span>
+    </div>
+
+    <div id="progress-wrap" class="hidden mb-8 p-4 rounded-lg border border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900">
+      <ul id="stages" class="space-y-1 text-sm"></ul>
+    </div>
+
+    <div id="error" class="hidden mb-8 p-4 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-sm text-red-800 dark:text-red-200 whitespace-pre-wrap"></div>
+
+    <section id="results" class="hidden">
+      <div class="sticky top-16 z-30 -mx-4 px-4 py-1.5 glass flex flex-wrap items-center gap-x-2 gap-y-1">
+        <nav id="results-nav" class="flex flex-wrap items-center" aria-label="Results sections"></nav>
+        <div class="ml-auto flex flex-wrap items-center gap-1.5">
+          <button id="download-html" type="button" class="text-xs font-semibold rounded-md px-2.5 py-1 bg-accent-700 text-white hover:bg-accent-800">Download report</button>
+          <button id="download-json" type="button" class="text-xs font-medium rounded-md px-2.5 py-1 bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700">JSON</button>
+          <button id="download-r" type="button" class="text-xs font-medium rounded-md px-2.5 py-1 bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700">R script</button>
+          <button id="download-svg" type="button" class="hidden text-xs font-medium rounded-md px-2.5 py-1 bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700">Diagram SVG</button>
+        </div>
+      </div>
+      <div id="results-body" class="report"></div>
+    </section>
+
+    <div class="mt-12 pt-8 border-t border-surface-200 dark:border-surface-800">
+      <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-100 mb-3">What is computed</h2>
+      <ul class="grid sm:grid-cols-2 gap-x-8 gap-y-1 text-sm text-surface-600 dark:text-surface-400 list-disc pl-5 mb-8">
+        <li>PLS path modeling with mode A, mode B, unit-weight and PLSc (reflective) constructs, two-stage higher-order composites, interaction and quadratic terms</li>
+        <li>Outer loadings and weights, Cronbach's alpha, rho<sub>A</sub>, rho<sub>C</sub>, AVE, indicator and antecedent VIFs</li>
+        <li>HTMT with bootstrap intervals, Fornell&ndash;Larcker, cross-loadings</li>
+        <li>Path coefficients, R&sup2;, f&sup2;, total, total indirect and specific indirect effects with percentile bootstrap intervals</li>
+        <li>PLSpredict (k-fold, DA/EA) against the linear-model benchmark, Q&sup2;<sub>predict</sub>, and CVPAT</li>
+        <li>The bootstrapped congruence-coefficient test (Franke, Sarstedt &amp; Danks, 2021)</li>
+        <li>Threshold assessment following <em>PLS-SEM Using R</em>, with every rule and source stated</li>
+        <li>Path diagrams as seminr's <code>plot()</code>, a standalone HTML report, all results as JSON, and the R script</li>
+      </ul>
+      <div class="flex flex-wrap gap-3">
+        <Button href="https://github.com/sem-in-r/seminr-ts" variant="secondary" external>seminr-ts on GitHub</Button>
+        <Button href="https://github.com/sem-in-r/seminrExtras" variant="secondary" external>seminrExtras on GitHub</Button>
+        <Button href="/learn" variant="secondary">Learn PLS-SEM</Button>
+        <Button href="/software" variant="secondary">All software</Button>
+      </div>
+    </div>
+  </div>
+</PageLayout>
+
+<script>
+  import { mount } from "../../lib/seminr/app";
+  mount();
+</script>

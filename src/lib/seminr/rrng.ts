@@ -9,7 +9,7 @@
  * the *same* rows, so this app's numbers are identical to the published R
  * implementation's rather than merely close to them.
  *
- * Verified against R 4.6.0 in test/parity.mjs.
+ * Verified against R 4.6.0 in test/rng-parity.mjs.
  */
 
 const N = 624;
@@ -116,6 +116,26 @@ export class RRNG {
   sampleIntReplace(n: number, size: number): Int32Array {
     const out = new Int32Array(size);
     for (let i = 0; i < size; i++) out[i] = this.unifIndex(n);
+    return out;
+  }
+
+  /**
+   * Equivalent to R's `sample.int(n, size, replace = FALSE)` (R >= 3.6, the
+   * non-hashing path used whenever n <= 1e7), returned 0-based. This is the
+   * shuffle seminr's `predict_pls()` applies before cutting folds, so a seeded
+   * PLSpredict here uses the same fold assignment as `set.seed(seed)` in R.
+   */
+  sampleIntNoReplace(n: number, size: number): Int32Array {
+    if (size > n) throw new Error("cannot take a sample larger than the population");
+    const x = new Int32Array(n);
+    for (let i = 0; i < n; i++) x[i] = i;
+    const out = new Int32Array(size);
+    let m = n;
+    for (let i = 0; i < size; i++) {
+      const j = this.unifIndex(m);
+      out[i] = x[j];
+      x[j] = x[--m];
+    }
     return out;
   }
 }

@@ -2,6 +2,12 @@
   command = "npm run build"
   publish = "dist"
 
+# The congruence test moved into the full SEMinR app.
+[[redirects]]
+  from = "/congruence/*"
+  to = "/seminr/"
+  status = 301
+
 [[headers]]
   for = "/_astro/*"
   [headers.values]
