@@ -1,6 +1,6 @@
 # Resume point — nicholasdanks.com
 
-**State (2026-09-14, end of day):** Working tree has an uncommitted, fully verified change set (astro check, build, headless browser test, R-parity suite all pass). Nick has not asked to commit or deploy yet. Next step is his: read the summary below, try the assistant on the live page once it is pushed, and decide whether epistemic rho should also leave the page's own report.
+**State (2026-09-14, end of day):** Everything is live on nicholasdanks.com. The review page uses Nick's own free-tier Gemini key from the Netlify env var `PUBLIC_GEMINI_API_KEY` (site-key mode confirmed in the live bundle); Google's service-account-bound keys cannot be referrer-restricted, so the key is extractable by design and the project must stay billing-free. Next step is Nick's: UX pass on the live page; decide whether epistemic rho should also leave the page's own report.
 
 ## What changed today
 
