@@ -259,14 +259,11 @@ const toggle = "inline-flex items-center gap-2 text-sm font-medium text-surface-
       </p>
       <ul class="text-sm text-surface-700 dark:text-surface-300 list-disc pl-5 mb-4 space-y-1 max-w-3xl">
         <li><strong>Your data never leaves your computer.</strong> What is sent is the digest under &ldquo;What leaves the browser&rdquo;: reliability, loadings, paths, intervals, verdicts and column <em>names</em>. No rows, scores or residuals exist in it.</li>
-        <li><strong>Your key, your account.</strong> Requests go from this page straight to <code>generativelanguage.googleapis.com</code> with your own <a href="https://aistudio.google.com/apikey" rel="noopener" class="underline">Gemini API key</a>; there is no server in between and no key of ours. The key is kept in this tab unless you tick &ldquo;remember on this device&rdquo;.</li>
-        <li><strong>Free or paid, your choice.</strong> A key from Google AI Studio works on the free tier, which bills nothing but lets Google use what is sent (the aggregate digest, never your data) to improve its products. A key on a billed project is not used that way; a full review then costs a few cents at <a href="https://ai.google.dev/gemini-api/docs/pricing" rel="noopener" class="underline">Google's list prices</a>. The token count is shown as you go.</li>
+        <li><strong>Free to use.</strong> This page carries a Gemini key of its own on Google's free tier, restricted to this site, so the review costs you nothing. Requests go from your browser straight to <code>generativelanguage.googleapis.com</code>; there is no server in between. The free tier lets Google use what is sent (the aggregate digest, never your data) to improve its products.</li>
+        <li><strong>Or your own key.</strong> If the shared free-tier limit is busy, or you would rather the digest went through your own Google account, paste a <a href="https://aistudio.google.com/apikey" rel="noopener" class="underline">Gemini API key</a> of your own below. It is kept in this tab unless you tick &ldquo;remember on this device&rdquo;. On a billed project a full review costs a few cents at <a href="https://ai.google.dev/gemini-api/docs/pricing" rel="noopener" class="underline">Google's list prices</a>, and Google does not use the content.</li>
       </ul>
 
       <div class="flex flex-wrap items-end gap-3 mb-3">
-        <label class="block text-sm text-surface-700 dark:text-surface-300 grow max-w-md">Gemini API key
-          <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…" class={field} />
-        </label>
         <label class="block text-sm text-surface-700 dark:text-surface-300">Model
           <select id="eval-model" class={field}>
             <option value="gemini-3.8-flash">Gemini 3.8 Flash (newest, fast)</option>
@@ -274,11 +271,21 @@ const toggle = "inline-flex items-center gap-2 text-sm font-medium text-surface-
             <option value="gemini-pro-latest">Gemini Pro, latest (slower, more careful)</option>
           </select>
         </label>
-        <label class="inline-flex items-center gap-2 text-sm text-surface-700 dark:text-surface-300 pb-2">
-          <input id="remember-key" type="checkbox" /> remember on this device
-        </label>
-        <button id="eval-forget" type="button" class="text-xs text-surface-500 dark:text-surface-400 underline pb-2">forget key</button>
+        <p id="key-mode" class="text-sm text-surface-600 dark:text-surface-400 pb-2 hidden">Using this site's free key.</p>
       </div>
+
+      <details id="own-key" class="mb-3">
+        <summary class="cursor-pointer text-sm font-medium text-surface-800 dark:text-surface-200">Use your own Gemini API key instead</summary>
+        <div class="flex flex-wrap items-end gap-3 mt-2">
+          <label class="block text-sm text-surface-700 dark:text-surface-300 grow max-w-md">Gemini API key
+            <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…" class={field} />
+          </label>
+          <label class="inline-flex items-center gap-2 text-sm text-surface-700 dark:text-surface-300 pb-2">
+            <input id="remember-key" type="checkbox" /> remember on this device
+          </label>
+          <button id="eval-forget" type="button" class="text-xs text-surface-500 dark:text-surface-400 underline pb-2">forget key</button>
+        </div>
+      </details>
 
       <div class="flex flex-wrap items-center gap-3 mb-3">
         <button id="eval-start" type="button"
