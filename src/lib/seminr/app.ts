@@ -413,10 +413,13 @@ function analyzeInWorker(req: WorkerRequest, onProgress?: (text: string) => void
 }
 
 // ---------------------------------------------------------------------------
-// evaluation assistant (bring your own Anthropic key; nothing but aggregates leaves)
+// evaluation assistant (bring your own Gemini key; nothing but aggregates leaves)
 // ---------------------------------------------------------------------------
 
-const KEY_STORAGE = "seminr-anthropic-key";
+const KEY_STORAGE = "seminr-gemini-key";
+const MODEL_STORAGE = "seminr-gemini-model";
+/** Storage keys from the retired Anthropic transport, cleared on load. */
+const RETIRED_STORAGE = ["seminr-anthropic-key", "seminr-anthropic-model", "seminr-anthropic-base-url"];
 let evalSession: EvaluatorSession | null = null;
 let evalAbort: AbortController | null = null;
 let evalBusy = false;
@@ -425,7 +428,7 @@ const alternativeRuns = new Map<string, { input: RunModelInput; result: Analysis
 let alternativeCount = 0;
 let workingTimer: ReturnType<typeof setInterval> | null = null;
 
-/** The panel-wide "Claude is working" banner with phase and elapsed time. */
+/** The panel-wide "the assistant is working" banner with phase and elapsed time. */
 function setWorking(phase: string | null) {
   const el = $("eval-working");
   if (phase === null) {
@@ -554,7 +557,7 @@ function appendTranscript(html: string, cls = ""): HTMLElement {
 
 function currentDigest(label = "current model"): Digest | null {
   if (!lastResult) return null;
-  return buildDigest(lastResult, dataColumns, label);
+  return buildDigest(lastResult, dataColumns, label, { compact: true });
 }
 
 async function evaluatorModule() {
@@ -585,7 +588,7 @@ async function runModelForAssistant(input: RunModelInput, card: HTMLElement): Pr
     card.querySelector(".tool-stage")!.textContent = `${stage}…`;
     setWorking(`Testing alternative ${alternativeCount}: ${stage.toLowerCase()}`);
   });
-  const digest = buildDigest(result, dataColumns, input.label);
+  const digest = buildDigest(result, dataColumns, input.label, { compact: true });
   if (!digestLooksSafe(digest)) throw new Error("Digest safety check failed; nothing was sent.");
   alternativeRuns.set(input.label, { input, result });
   card.querySelector(".tool-stage")!.textContent = `done in ${((Date.now() - started) / 1000).toFixed(1)} s`;
@@ -595,7 +598,7 @@ async function runModelForAssistant(input: RunModelInput, card: HTMLElement): Pr
 
 async function evaluatorTurn(userText: string, opening: boolean) {
   const key = $<HTMLInputElement>("api-key").value.trim();
-  if (!key) { evalStatus("Enter your Anthropic API key first."); return; }
+  if (!key) { evalStatus("Enter your Gemini API key first."); return; }
   if (!lastResult) { evalStatus("Run an analysis first."); return; }
   if (evalBusy) return;
   saveKey(key, $<HTMLInputElement>("remember-key").checked);
@@ -604,7 +607,7 @@ async function evaluatorTurn(userText: string, opening: boolean) {
   if (!evalSession || opening) {
     const digest = currentDigest();
     if (!digest || !digestLooksSafe(digest)) { evalStatus("Digest safety check failed; nothing was sent."); return; }
-    evalSession = { messages: [], digest };
+    evalSession = { contents: [], digest };
     $("eval-transcript").innerHTML = "";
     alternativeCount = 0;
     evalUsage.input = evalUsage.output = evalUsage.cacheRead = evalUsage.cacheWrite = 0;
@@ -614,25 +617,27 @@ async function evaluatorTurn(userText: string, opening: boolean) {
 
   // Test hook: a mock endpoint set by the headless harness. Never set in normal use.
   let testBase: string | undefined;
-  try { testBase = localStorage.getItem("seminr-anthropic-base-url") ?? undefined; } catch { /* ignore */ }
-  const client = m.createClient(key, testBase);
+  try { testBase = localStorage.getItem("seminr-gemini-base-url") ?? undefined; } catch { /* ignore */ }
+  const modelId = val("eval-model");
+  const model = m.evaluatorModel(modelId);
+  try { localStorage.setItem(MODEL_STORAGE, model.id); } catch { /* ignore */ }
   evalBusy = true;
   evalAbort = new AbortController();
   $("eval-stop").classList.remove("hidden");
   $<HTMLButtonElement>("eval-send").disabled = true;
   $<HTMLButtonElement>("eval-start").disabled = true;
-  evalStatus("Claude is reading the results…");
+  evalStatus("Gemini is reading the results…");
 
   let bubble: HTMLElement | null = null;
   let text = "";
   const flush = () => { if (bubble) bubble.querySelector(".body")!.innerHTML = mdToHtml(text); };
   try {
-    if (opening) appendTranscript(`<div class="who">How this works</div><p class="note" style="margin:0">Claude reads the aggregate results first (this can take a minute), then usually tests a few alternative specifications on your data. Each test appears below as a numbered card while it runs here in your browser; your results above are not changed. The review follows when the tests are done.</p>`, "user");
-    setWorking("Claude is reading your results");
-    await m.runTurn(client, evalSession, content, (input) => {
+    if (opening) appendTranscript(`<div class="who">How this works</div><p class="note" style="margin:0">Gemini reads the aggregate results first (this can take up to a minute), then usually tests a few alternative specifications on your data. Each test appears below as a numbered card while it runs here in your browser; your results above are not changed. The review follows when the tests are done.</p>`, "user");
+    setWorking("Gemini is reading your results");
+    await m.runTurn(key, evalSession, content, (input) => {
       alternativeCount++;
       setWorking(`Testing alternative ${alternativeCount}: ${input.label}`);
-      const card = appendTranscript(`<div class="who">Alternative ${alternativeCount} · run on your data at Claude's request</div><div class="tool-head"><strong>${esc(input.label)}</strong> <span class="tool-stage note">starting…</span></div><div class="tool-compare"></div><details><summary>SEMinR code Claude asked to run</summary><pre class="code"><code>${esc(input.code)}</code></pre></details><div class="tool-actions"></div>`, "tool");
+      const card = appendTranscript(`<div class="who">Alternative ${alternativeCount} · run on your data at Gemini's request</div><div class="tool-head"><strong>${esc(input.label)}</strong> <span class="tool-stage note">starting…</span></div><div class="tool-compare"></div><details><summary>SEMinR code Gemini asked to run</summary><pre class="code"><code>${esc(input.code)}</code></pre></details><div class="tool-actions"></div>`, "tool");
       return runModelForAssistant(input, card).then((d) => {
         card.querySelector(".tool-stage")!.textContent = "done";
         const actions = card.querySelector(".tool-actions")!;
@@ -645,18 +650,20 @@ async function evaluatorTurn(userText: string, opening: boolean) {
       });
     }, {
       onText: (delta) => {
-        if (!bubble) bubble = appendTranscript(`<div class="who">Claude</div><div class="body"></div>`, "assistant");
+        if (!bubble) bubble = appendTranscript(`<div class="who">Gemini</div><div class="body"></div>`, "assistant");
         text += delta;
         flush();
-        setWorking("Claude is writing");
+        setWorking("Gemini is writing");
       },
       onToolStart: () => { evalStatus(""); },
-      onToolEnd: (call) => { evalStatus(call.ok ? "" : `Run failed: ${call.summary}`); setWorking(call.ok ? "Claude is reading the alternative's results" : "Claude is continuing"); },
+      onToolEnd: (call) => { evalStatus(call.ok ? "" : `Run failed: ${call.summary}`); setWorking(call.ok ? "Gemini is reading the alternative's results" : "Gemini is continuing"); },
       onUsage: (u) => {
         evalUsage.input += u.input; evalUsage.output += u.output; evalUsage.cacheRead += u.cacheRead; evalUsage.cacheWrite += u.cacheWrite;
-        $("eval-usage").textContent = `Tokens this session: ${(evalUsage.input + evalUsage.cacheRead + evalUsage.cacheWrite).toLocaleString()} in (${evalUsage.cacheRead.toLocaleString()} from cache), ${evalUsage.output.toLocaleString()} out.`;
+        const cost = m.estimateCost(evalUsage, model);
+        $("eval-usage").textContent = `Tokens this session: ${(evalUsage.input + evalUsage.cacheRead).toLocaleString()} in (${evalUsage.cacheRead.toLocaleString()} from cache), ${evalUsage.output.toLocaleString()} out${cost === null ? "" : `; free on Google's free tier, at most US$${cost.toFixed(2)} on the paid tier`} (${model.id}).`;
       },
-    }, evalAbort.signal);
+      onStatus: (msg) => evalStatus(msg),
+    }, evalAbort.signal, model.id, testBase);
     evalStatus("");
   } catch (err) {
     evalStatus(m.describeError(err));
@@ -671,8 +678,14 @@ async function evaluatorTurn(userText: string, opening: boolean) {
 }
 
 function mountEvaluator() {
+  try { for (const k of RETIRED_STORAGE) { localStorage.removeItem(k); sessionStorage.removeItem(k); } } catch { /* ignore */ }
   const key = loadKey();
   if (key) { $<HTMLInputElement>("api-key").value = key; $<HTMLInputElement>("remember-key").checked = !!localStorage.getItem(KEY_STORAGE); }
+  try {
+    const saved = localStorage.getItem(MODEL_STORAGE);
+    const select = $<HTMLSelectElement>("eval-model");
+    if (saved && [...select.options].some((o) => o.value === saved)) select.value = saved;
+  } catch { /* ignore */ }
   $("eval-start").addEventListener("click", () => void evaluatorTurn(val("eval-question").trim(), true));
   $("eval-send").addEventListener("click", () => {
     const q = val("eval-question").trim();

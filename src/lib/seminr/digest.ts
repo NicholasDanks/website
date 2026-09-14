@@ -54,7 +54,7 @@ export interface Digest {
   /** Column names available in the data (names only, never values). */
   availableColumns: string[];
   modelCode: string;
-  constructs: { name: string; measurement: string; class: string; items: string[]; epistemicRho: number | null }[];
+  constructs: { name: string; measurement: string; class: string; items: string[] }[];
   paths: { from: string; to: string; beta: number | null; p: number | null; ciLower: number | null; ciUpper: number | null; f2: number | null }[];
   rSquared: Record<string, { r2: number | null; adjusted: number | null }>;
   /** Alpha, rho_A, rho_C, AVE for reflective / mode A constructs only (meaningless for mode B). */
@@ -68,16 +68,21 @@ export interface Digest {
   htmt: { pair: string; htmt: number | null; ciUpper: number | null }[];
   antecedentVif: Record<string, Record<string, number | null>>;
   constructCorrelations: Record<string, Record<string, number | null>>;
-  indicatorStatistics: Record<string, Record<string, number | null>>;
-  mediation: { path: string; indirect: number | null; p: number | null; direct: number | null; directP: number | null; type: string; upsilon: number | null }[];
+  /** Full per-item descriptives (verbose form) … */
+  indicatorStatistics?: Record<string, Record<string, number | null>>;
+  /** … or, in the compact form, only what a reviewer acts on. */
+  indicatorSummary?: { items: number; missing: Record<string, number>; maxAbsSkewness: { item: string; value: number | null }; maxKurtosis: { item: string; value: number | null } };
+  mediation: { path: string; indirect: number | null; ciLower: number | null; ciUpper: number | null; p: number | null; direct: number | null; directP: number | null; type: string; upsilon: number | null }[];
   moderatedMediation: { antecedent: string; mediator: string; moderator: string; outcome: string; index: number | null; ciLower: number | null; ciUpper: number | null; p: number | null }[];
   predict: null | {
     verdicts: Record<string, { power: string; betterThanLm: number; indicators: number; worseThanNaive: number }>;
     indicators: { indicator: string; construct: string; plsRmse: number | null; lmRmse: number | null; naiveRmse: number | null; q2predict: number | null }[];
     cvpat: null | { vsLm: { diff: number | null; p: number | null }; vsIa: { diff: number | null; p: number | null } };
   };
-  congruence: null | { pair: string; estimate: number | null; ciUpper: number | null; distinguishable: boolean }[];
-  /** Quality gates that failed or need a look, and every finding, in words. */
+  congruence?: null | { pair: string; estimate: number | null; ciUpper: number | null; distinguishable: boolean }[];
+  /** Compact form of the congruence test: counts, the pairs that are not distinguishable, and the highest bound. */
+  congruenceSummary?: null | { pairs: number; notDistinguishable: { pair: string; estimate: number | null; ciUpper: number | null }[]; highest: { pair: string; estimate: number | null; ciUpper: number | null } | null };
+  /** Quality gates that failed or need a look (and, in the verbose form, every finding in words). */
   assessment: { kind: string; status: string; section: string; subject: string; criterion: string; message: string; source: string }[];
   warnings: string[];
 }
@@ -87,7 +92,17 @@ function cleanName(s: string): string {
   return s.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 80);
 }
 
-export function buildDigest(r: AnalysisResult, availableColumns: string[], label = "current model"): Digest {
+export interface DigestOptions {
+  /**
+   * Compact form: quality gates only (no prose findings, which restate the
+   * structured fields), a per-item summary instead of full descriptives, and
+   * a congruence summary instead of every pair. About a third of the tokens
+   * of the verbose form with the same decisive numbers.
+   */
+  compact?: boolean;
+}
+
+export function buildDigest(r: AnalysisResult, availableColumns: string[], label = "current model", opts: DigestOptions = {}): Digest {
   availableColumns = availableColumns.slice(0, 500).map(cleanName);
   label = cleanName(label);
   const s = r.summary;
@@ -135,6 +150,7 @@ export function buildDigest(r: AnalysisResult, availableColumns: string[], label
     }
   }
 
+  const congruenceRows: Digest["congruence"] = cg ? cg.rows.map((row) => ({ pair: row.pair.replace(" -> ", " <-> "), estimate: r3(row.estimate), ciUpper: r3(row.ciHi), distinguishable: row.significant })) : null;
   const reflectiveNames = new Set(r.model.constructs.filter((c) => c.class === "reflective" && c.items.length > 1).map((c) => c.name));
   const htmt: Digest["htmt"] = [];
   const bh = boot?.bootstrappedHtmt90 ?? boot?.bootstrappedHtmt;
@@ -144,7 +160,9 @@ export function buildDigest(r: AnalysisResult, availableColumns: string[], label
     if (!Number.isFinite(v)) continue;
     const a = hm.rows[i], b = hm.cols[j];
     if (!reflectiveNames.has(a) || !reflectiveNames.has(b)) continue;
-    const up = bh ? (Number.isFinite(cell(bh, `${a}  ->  ${b}`, ciHi)) ? cell(bh, `${a}  ->  ${b}`, ciHi) : cell(bh, `${b}  ->  ${a}`, ciHi)) : NaN;
+    // The HTMT matrix carries its own interval columns ("95% CI" at alpha 0.10), not the paths matrix's "97.5% CI".
+    const htmtHi = bh?.cols[5] ?? "";
+    const up = bh ? (Number.isFinite(cell(bh, `${a}  ->  ${b}`, htmtHi)) ? cell(bh, `${a}  ->  ${b}`, htmtHi) : cell(bh, `${b}  ->  ${a}`, htmtHi)) : NaN;
     htmt.push({ pair: `${a} <-> ${b}`, htmt: r3(v), ciUpper: r3(up) });
   }
 
@@ -169,7 +187,7 @@ export function buildDigest(r: AnalysisResult, availableColumns: string[], label
     },
     availableColumns,
     modelCode: r.input.code,
-    constructs: r.model.constructs.map((c) => ({ name: c.name, measurement: c.label, class: c.class, items: c.items, epistemicRho: c.epistemicRho === undefined ? null : r3(c.epistemicRho) })),
+    constructs: r.model.constructs.map((c) => ({ name: c.name, measurement: c.label, class: c.class, items: c.items })),
     paths,
     rSquared,
     reliability: Object.fromEntries(Object.entries(matrixToObject(s.reliability)).filter(([name]) => reflectiveNames.has(name))),
@@ -180,8 +198,9 @@ export function buildDigest(r: AnalysisResult, availableColumns: string[], label
     htmt,
     antecedentVif,
     constructCorrelations: matrixToObject(s.descriptives.correlations.constructs),
-    indicatorStatistics: matrixToObject(s.descriptives.statistics.items),
-    mediation: med ? med.specific.map((e) => ({ path: e.path, indirect: r3(e.originalEst), p: r3(e.bootstrapP), direct: r3(e.directEst), directP: r3(e.directP), type: e.type, upsilon: r3(e.upsilon) })) : [],
+    indicatorStatistics: opts.compact ? undefined : matrixToObject(s.descriptives.statistics.items),
+    indicatorSummary: opts.compact ? indicatorSummary(s.descriptives.statistics.items) : undefined,
+    mediation: med ? med.specific.map((e) => ({ path: e.path, indirect: r3(e.originalEst), ciLower: r3(e.ciLower), ciUpper: r3(e.ciUpper), p: r3(e.bootstrapP), direct: r3(e.directEst), directP: r3(e.directP), type: e.type, upsilon: r3(e.upsilon) })) : [],
     moderatedMediation: (r.moderatedMediation ?? []).map((m) => ({ antecedent: m.antecedent, mediator: m.mediator, moderator: m.moderator, outcome: m.outcome, index: r3(m.index), ciLower: r3(m.ciLower), ciUpper: r3(m.ciUpper), p: r3(m.p) })),
     predict: pr ? {
       verdicts: Object.fromEntries(Object.values(pr.verdicts).map((v) => [v.construct, { power: v.power, betterThanLm: v.betterThanLm, indicators: v.indicators, worseThanNaive: v.worseThanNaive }])),
@@ -195,8 +214,10 @@ export function buildDigest(r: AnalysisResult, availableColumns: string[], label
         vsIa: { diff: r3(cell(cv.ia, "Overall", "Diff")), p: r3(cell(cv.ia, "Overall", "Boot P Value")) },
       } : null,
     } : null,
-    congruence: cg ? cg.rows.map((row) => ({ pair: row.pair.replace(" -> ", " <-> "), estimate: r3(row.estimate), ciUpper: r3(row.ciHi), distinguishable: row.significant })) : null,
-    assessment: r.assessment
+    congruence: opts.compact ? undefined : congruenceRows,
+    congruenceSummary: opts.compact ? (congruenceRows ? congruenceSummary(congruenceRows) : null) : undefined,
+    // Epistemic rho is unpublished work and stays out of what the reviewer sees.
+    assessment: r.assessment.filter((a) => !/^Epistemic rho/.test(a.criterion) && (!opts.compact || a.kind === "gate"))
       .filter((a) => a.kind === "finding" || a.status === "fail" || a.status === "warn")
       .map((a) => ({ kind: a.kind, status: a.status, section: a.section, subject: a.subject, criterion: a.criterion, message: a.message, source: a.source })),
     warnings: r.model.warnings.filter((w) => !/observations are valid/.test(w)),
@@ -204,6 +225,28 @@ export function buildDigest(r: AnalysisResult, availableColumns: string[], label
 }
 
 /** Sanity guard: the serialised digest must never carry a long numeric vector. */
+function indicatorSummary(m: NamedMatrix): NonNullable<Digest["indicatorSummary"]> {
+  const col = (name: string) => m.cols.indexOf(name);
+  const cMissing = col("Missing"), cSkew = col("Skewness"), cKurt = col("Kurtosis");
+  const missing: Record<string, number> = {};
+  let maxSkew = { item: "", value: NaN }, maxKurt = { item: "", value: NaN };
+  m.rows.forEach((item, i) => {
+    const miss = cMissing >= 0 ? m.values[i][cMissing] : 0;
+    if (miss > 0) missing[item] = miss;
+    const sk = cSkew >= 0 ? m.values[i][cSkew] : NaN;
+    if (Number.isFinite(sk) && (!Number.isFinite(maxSkew.value) || Math.abs(sk) > Math.abs(maxSkew.value))) maxSkew = { item, value: sk };
+    const ku = cKurt >= 0 ? m.values[i][cKurt] : NaN;
+    if (Number.isFinite(ku) && (!Number.isFinite(maxKurt.value) || ku > maxKurt.value)) maxKurt = { item, value: ku };
+  });
+  return { items: m.rows.length, missing, maxAbsSkewness: { item: maxSkew.item, value: r3(maxSkew.value) }, maxKurtosis: { item: maxKurt.item, value: r3(maxKurt.value) } };
+}
+
+function congruenceSummary(rows: NonNullable<Digest["congruence"]>): NonNullable<Digest["congruenceSummary"]> {
+  const notDistinguishable = rows.filter((x) => !x.distinguishable).map(({ pair, estimate, ciUpper }) => ({ pair, estimate, ciUpper }));
+  const highest = rows.reduce<(typeof rows)[number] | null>((best, x) => (x.ciUpper !== null && (best === null || best.ciUpper === null || x.ciUpper > best.ciUpper) ? x : best), null);
+  return { pairs: rows.length, notDistinguishable, highest: highest ? { pair: highest.pair, estimate: highest.estimate, ciUpper: highest.ciUpper } : null };
+}
+
 export function digestLooksSafe(d: Digest): boolean {
   const text = JSON.stringify(d);
   // any array of 30+ numbers would be a data column

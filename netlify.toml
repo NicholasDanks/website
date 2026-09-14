@@ -36,6 +36,6 @@
     # No inline scripts anywhere (theme init is /theme-init.js; Astro is configured
     # not to inline component scripts). 'wasm-unsafe-eval' is for the Graphviz
     # renderer. connect-src lists the only remote endpoint the app may call: the
-    # Anthropic API, with the user's own key. Inline styles remain allowed because
+    # Gemini API, with the user's own key. Inline styles remain allowed because
     # the syntax-highlighted tutorial pages use style attributes.
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://api.anthropic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-src https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://generativelanguage.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-src https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"

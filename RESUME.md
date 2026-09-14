@@ -1,27 +1,26 @@
 # Resume point — nicholasdanks.com
 
-**State (2026-09-11, end of day):** Everything is live at commit `6ae2744`. Next step is yours: run the Claude review once more with the conservative prompt and judge the tone; then design and record the YouTube video (board card exists). Nothing is blocked on anyone else.
+**State (2026-09-14, end of day):** Working tree has an uncommitted, fully verified change set (astro check, build, headless browser test, R-parity suite all pass). Nick has not asked to commit or deploy yet. Next step is his: read the summary below, try the assistant on the live page once it is pushed, and decide whether epistemic rho should also leave the page's own report.
 
 ## What changed today
 
-- Housekeeping: site data consolidated (`src/data/site.ts`, `timeline.ts`), versions/downloads from the software collection, typography plugin, deps upgraded, README rewritten.
-- New app `/seminr/` (replaces `/congruence/`, 301): `src/lib/seminr/` — parser, pipeline (`analyze.ts`), gates-vs-findings assessment (`assess.ts`), report (`report.ts`), page logic (`app.ts`), worker pool bootstrap (`bootstrap.ts`, `bootWorker.ts`, `replicate.ts`), congruence, R script.
-- Textbook v2 compliance (checked against `system.file("demo", package="seminrExtras")` chap4–8): unidimensionality, redundancy analysis on `*_global`, HTMT at α = 0.10, one-tailed CVPAT, slope plots, υ, index of moderated mediation. R fixtures in `test/fixtures.R`, `test/fixtures-textbook.R`.
-- Claude review assistant (`digest.ts`, `evaluator.ts`): BYOK direct to Anthropic, aggregate-only digest, `run_model` tool executed locally, conservative/suggestion framing, prompt caching, working banner + numbered alternative cards.
-- Security: strict CSP (no inline scripts; `public/theme-init.js`; Astro `assetsInlineLimit: 0`), bounded parser, SVG sanitiser (`sanitize.ts`), XSS regression tests, prompt-injection hygiene. `test/csp-server.mjs` + `test/headless-*.mjs` + `test/mock-anthropic.mjs` verify a build under production headers in headless Chrome.
+- **Review assistant moved from Anthropic to Gemini** (`src/lib/seminr/evaluator.ts` rewritten): browser calls `generativelanguage.googleapis.com` directly over REST with SSE streaming and function calling, no SDK bundled (`@anthropic-ai/sdk` is now a dev dependency only). Model dropdown on the page: gemini-3.8-flash (default), gemini-3.6-flash, gemini-pro-latest. Page copy discloses that a free-tier key lets Google use the aggregate digest to improve products. CSP `connect-src` in `netlify.toml` now names the Gemini host. Old Anthropic storage keys are cleared on load.
+- **Epistemic rho removed from the review** (unpublished): stripped from the digest and its gate lines, gone from the prompt. Still shown on the page's own report.
+- **Digest bugs fixed:** the HTMT bootstrap upper bound was looked up under the paths matrix's column name and was always null; a passing HTMT gate never reached the model, so a bound near 0.85 now warns.
+- **Compact digest** (`buildDigest(..., { compact: true })`, the page default): gates only, per-item summary, congruence summary, mediation CIs added. Halves input tokens with no measured accuracy loss.
+- **Prompt engineered to v4** with a scored harness: `test/model-compare.mjs` (runs a review through Gemini or Claude on a demo digest), `test/review-audit.mjs` (ungrounded numbers, directive phrasing, LaTeX, coverage, per-demo rubric of 22 / 18 facts), `test/run-model-cli.mjs` + `test/audit-review.mjs` (for a subagent reviewer), `test/anthropic-transport.mjs` (Claude comparison arm; needs `ANTHROPIC_API_KEY` and, for an unscoped key, `ANTHROPIC_WORKSPACE_ID`). Results: v4 + compact on Gemini 3.8 Flash = 20 and 22 of 22 (corp-rep), 18 of 18 twice (moderation), ~US$0.037 paid-tier equivalent, free on the free tier; baseline v1 + verbose digest = 22 and 18, 17, ~US$0.056. Sonnet 5 as a Claude Code subagent on the same prompt and digest: 21 of 22 twice, deeper robustness reasoning, ~1.5× longer. Low thinking level: cheapest and least accurate, rejected.
+- Keys live in the gitignored `.env`; the Anthropic key there is valid but unscoped (needs a workspace id or a workspace-scoped key); the first key Nick pasted was rejected and both keys appeared in chat, so rotate when convenient.
 
 ## Blocked / waiting
 
-- Nothing blocked on others.
-- On me (Nick): try the assistant with the new prompt; record the video; decide whether the private pls-sem knowledge base should drive the assistant (needs a server-side prompt, which contradicts the no-server story).
+- Nothing blocked on others. Deploy = commit + push to `main` (Netlify).
 
 ## Deliberately left undone
 
-- Astro 7 upgrade (clears the three build-time `npm audit` items; major version, not urgent).
-- `compare_models` tool for the assistant (BIC weights + CVPAT compare across specifications, book Ch. 6.4); currently Claude does it by hand with two `run_model` calls.
-- Course entries in `src/data/courses/` still say 2024-25 is "current"; not verified.
-- Chrome extension was disconnected most of the session; visual checks were via the headless harness, not screenshots.
+- Epistemic rho still shows on the page's report table (only the review was asked to drop it).
+- No Claude API arm was run (workspace id missing); Sonnet comparison came from a subagent with a CLI stand-in for run_model, so its token counts were not measured.
+- Astro 7 upgrade; `compare_models` tool; course entries "current" year not verified; YouTube video.
 
 ## How to work here
 
-`npm run dev` · `npm run check` · `npm test` (R-parity suite) · `npm run build`. Push to `main` deploys (Netlify, ~30 s). Any new inline script or external endpoint must be added to the CSP in `netlify.toml`.
+`npm run dev` · `npm run check` · `npm test` (R-parity suite) · `npm run build`. Prompt or digest changes: run `set -a; source .env; set +a; npx tsx test/model-compare.mjs --repeat 2` and `--demo moderation`, compare `summary.md` rubric columns before shipping. Any new external endpoint must be added to the CSP in `netlify.toml`.

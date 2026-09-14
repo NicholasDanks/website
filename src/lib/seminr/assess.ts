@@ -278,6 +278,8 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
       if (Number.isFinite(upper)) {
         if (upper >= 1) { status = "fail"; message += ` The 95% one-sided upper bound ${f3(upper)} includes 1.`; }
         else if (upper >= 0.9 && status === "ok") { status = "warn"; message += ` The 95% one-sided upper bound is ${f3(upper)} (≥ 0.90).`; }
+        else if (upper >= 0.85 && status === "ok") { status = "warn"; message += ` The 95% one-sided upper bound is ${f3(upper)} (≥ 0.85): distinctness holds only if ${x} and ${y} are conceptually similar.`; }
+        else if (upper >= 0.8 && status === "ok") { status = "warn"; message += ` The 95% one-sided upper bound is ${f3(upper)}, within a few hundredths of the 0.85 threshold: a point to discuss, not a failure.`; }
         else message += ` 95% one-sided upper bound ${f3(upper)}.`;
       }
       gate({

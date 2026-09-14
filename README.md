@@ -38,13 +38,13 @@ Parity with R is tested, not assumed: `test/seminr-parity.mjs` compares the summ
 
 ### The evaluation assistant
 
-After a run, the page can ask Claude (Opus 5) to review the model and test its own suggestions. Design constraints, enforced in code:
+After a run, the page can ask a Gemini model (3.8 Flash by default; 3.6 Flash and the latest Pro selectable) to review the model and test its own suggestions. Design constraints, enforced in code:
 
-- **The data never leaves the browser.** Claude receives only the digest built by `src/lib/seminr/digest.ts`: aggregate statistics, column *names*, and the assessment flags. `digestLooksSafe()` refuses anything that looks like a numeric vector, and the page shows the exact system prompt and opening message under "What leaves the browser".
-- **Claude can run code, not read data.** Its one tool, `run_model`, hands SEMinR code back to the page; the page estimates it locally in a worker and returns another digest (`src/lib/seminr/evaluator.ts`).
-- **The user's own key, direct to Anthropic.** The official SDK is called from the browser with `dangerouslyAllowBrowser`; there is no server and no site-owned key. The key lives in `sessionStorage` (or `localStorage` when the user opts in).
+- **The data never leaves the browser.** The model receives only the digest built by `src/lib/seminr/digest.ts`: aggregate statistics, column *names*, and the quality-gate flags. `digestLooksSafe()` refuses anything that looks like a numeric vector, and the page shows the exact system prompt and opening message under "What leaves the browser".
+- **The model can run code, not read data.** Its one tool, `run_model`, hands SEMinR code back to the page; the page estimates it locally in a worker and returns another digest (`src/lib/seminr/evaluator.ts`).
+- **The user's own key, direct to Google.** The Gemini REST API (`streamGenerateContent` with function calling) is called from the browser with the user's Google AI Studio key; no SDK is bundled, there is no server and no site-owned key. The key lives in `sessionStorage` (or `localStorage` when the user opts in). A free-tier key bills nothing but Google may use what is sent to improve its products; the page says so.
 
-`test/mock-anthropic.mjs` + `test/headless-evaluator.mjs` exercise the whole loop in headless Chrome against a fake endpoint that also checks nothing row-shaped is transmitted.
+`test/mock-gemini.mjs` + `test/headless-evaluator.mjs` exercise the whole loop in headless Chrome against a fake endpoint that also checks nothing row-shaped is transmitted. `test/model-compare.mjs` runs the same review through several models on a demo digest and scores each transcript with `test/review-audit.mjs` (grounded numbers, forbidden phrasing, coverage, a rubric of facts per demo); `test/anthropic-transport.mjs` keeps Claude models comparable on identical inputs (dev dependency only; needs `ANTHROPIC_API_KEY`, plus `ANTHROPIC_WORKSPACE_ID` for a key not scoped to a workspace). Keys go in the gitignored `.env`.
 
 ## Content updates
 
