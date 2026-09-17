@@ -50,6 +50,14 @@ export interface AssessmentItem {
   threshold: string;
   message: string;
   source: string;
+  /**
+   * A "warn" gate whose own message says no action is required (a
+   * non-significant weight with a loading ≥ 0.50, an HTMT bound just under the
+   * threshold, a VIF between 3 and 5). The page shows these as "worth a look"
+   * rather than as something to fix; the status stays "warn" so the review
+   * digest is unchanged.
+   */
+  advisory?: boolean;
 }
 
 const HAIR = "Hair et al., PLS-SEM Using R";
@@ -204,7 +212,7 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
       const v = vifs[it];
       if (Number.isFinite(v)) {
         gate({
-          section: "formative", status: v < 3 ? "ok" : v < 5 ? "warn" : "fail",
+          section: "formative", status: v < 3 ? "ok" : v < 5 ? "warn" : "fail", advisory: v >= 3 && v < 5,
           subject: `${it} (${c.name})`, criterion: "Indicator VIF (collinearity)",
           value: v, threshold: "< 3 ideally; < 5 acceptable",
           message: v < 3 ? `VIF = ${f3(v)}.` : v < 5 ? `VIF = ${f3(v)}: some collinearity among the indicators of ${c.name}.` : `VIF = ${f3(v)}: critical collinearity; merge or remove indicators, or split into a higher-order construct.`,
@@ -219,7 +227,7 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
         const sig = p < alpha;
         const status: AssessmentStatus = sig ? "ok" : Math.abs(l) >= 0.5 ? "warn" : "fail";
         gate({
-          section: "formative", status, subject: `${it} → ${c.name}`, criterion: "Outer weight (relative contribution)",
+          section: "formative", status, advisory: !sig && Math.abs(l) >= 0.5, subject: `${it} → ${c.name}`, criterion: "Outer weight (relative contribution)",
           value: w, threshold: `bootstrap p < ${alpha}; else loading ≥ 0.50`,
           message: sig
             ? `Weight ${f3(w)} is significant (p = ${f3(p)}, ${ciLabel} CI [${f3(br[ciLo])}, ${f3(br[ciHi])}]).`
@@ -270,6 +278,7 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
       const br = bootRow(bootHtmt, `${x}  ->  ${y}`) ?? bootRow(bootHtmt, `${y}  ->  ${x}`);
       const upper = br ? br[htmtHiCol] : NaN;
       let status: AssessmentStatus = v < 0.85 ? "ok" : v < 0.9 ? "warn" : "fail";
+      let advisory = false;
       let message = v < 0.85
         ? `HTMT = ${f3(v)}.`
         : v < 0.9
@@ -279,11 +288,11 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
         if (upper >= 1) { status = "fail"; message += ` The 95% one-sided upper bound ${f3(upper)} includes 1.`; }
         else if (upper >= 0.9 && status === "ok") { status = "warn"; message += ` The 95% one-sided upper bound is ${f3(upper)} (≥ 0.90).`; }
         else if (upper >= 0.85 && status === "ok") { status = "warn"; message += ` The 95% one-sided upper bound is ${f3(upper)} (≥ 0.85): distinctness holds only if ${x} and ${y} are conceptually similar.`; }
-        else if (upper >= 0.8 && status === "ok") { status = "warn"; message += ` The 95% one-sided upper bound is ${f3(upper)}, within a few hundredths of the 0.85 threshold: a point to discuss, not a failure.`; }
+        else if (upper >= 0.8 && status === "ok") { status = "warn"; advisory = true; message += ` The 95% one-sided upper bound is ${f3(upper)}, within a few hundredths of the 0.85 threshold: a point to discuss, not a failure.`; }
         else message += ` 95% one-sided upper bound ${f3(upper)}.`;
       }
       gate({
-        section: "discriminant", status, subject: `${x} ↔ ${y}`, criterion: "HTMT",
+        section: "discriminant", status, advisory, subject: `${x} ↔ ${y}`, criterion: "HTMT",
         value: v, threshold: "< 0.85 (distinct) or < 0.90 (similar); 95% one-sided upper bound below the threshold",
         message, source: `${HAIR}, Ch. 4.6; Henseler, Ringle & Sarstedt (2015); Ringle et al. (2023)`,
       });
@@ -303,7 +312,7 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
     for (const [iv, v] of Object.entries(ants)) {
       if (!Number.isFinite(v)) continue;
       gate({
-        section: "structural", status: v < 3 ? "ok" : v < 5 ? "warn" : "fail",
+        section: "structural", status: v < 3 ? "ok" : v < 5 ? "warn" : "fail", advisory: v >= 3 && v < 5,
         subject: `${iv} → ${dv}`, criterion: "Antecedent VIF (collinearity)",
         value: v, threshold: "< 3 ideally; < 5 acceptable",
         message: v < 3 ? `VIF = ${f3(v)}.` : v < 5 ? `VIF = ${f3(v)}: some collinearity among the predictors of ${dv}.` : `VIF = ${f3(v)}: critical collinearity among the predictors of ${dv}; coefficients are unstable.`,
@@ -440,9 +449,16 @@ export function assessAnalysis(r: AnalysisResult): AssessmentItem[] {
   return items;
 }
 
-/** Gate counts by status, for the verdict strip. */
-export function tallyGates(items: AssessmentItem[]): Record<AssessmentStatus, number> {
-  const t: Record<AssessmentStatus, number> = { ok: 0, warn: 0, fail: 0, info: 0 };
-  for (const it of items) if (it.kind === "gate") t[it.status]++;
+/** Whether a gate needs the user to act: a problem, or a check that is not advisory. */
+export const needsAction = (a: AssessmentItem): boolean =>
+  a.kind === "gate" && (a.status === "fail" || (a.status === "warn" && !a.advisory));
+
+/** Whether a gate is worth a look but needs no action. */
+export const worthALook = (a: AssessmentItem): boolean => a.kind === "gate" && a.status === "warn" && !!a.advisory;
+
+/** Gate counts by status, for the verdict strip; advisory checks are counted apart from "warn". */
+export function tallyGates(items: AssessmentItem[]): Record<AssessmentStatus | "advisory", number> {
+  const t: Record<AssessmentStatus | "advisory", number> = { ok: 0, warn: 0, fail: 0, info: 0, advisory: 0 };
+  for (const it of items) if (it.kind === "gate") t[worthALook(it) ? "advisory" : it.status]++;
   return t;
 }

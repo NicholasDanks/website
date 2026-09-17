@@ -18,7 +18,7 @@
 import type { NamedMatrix } from "@seminr/core";
 import type { AnalysisResult, ConstructInfo, PredictPower } from "./analyze";
 import { isStageError } from "./analyze";
-import { tallyGates, type AssessmentItem, type AssessmentSection } from "./assess";
+import { needsAction, tallyGates, worthALook, type AssessmentItem, type AssessmentSection } from "./assess";
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -34,6 +34,8 @@ export const fmt = (x: unknown, d = 3): string => {
 };
 
 const pfmt = (p: number): string => (!Number.isFinite(p) ? "" : p < 0.001 ? "&lt; 0.001" : p.toFixed(3));
+/** "p = 0.027" or "p &lt; 0.001", for running text. */
+const pText = (p: number): string => (p < 0.001 ? "p &lt; 0.001" : `p = ${pfmt(p)}`);
 
 function cell(m: NamedMatrix | undefined | null, row: string, col: string): number {
   if (!m) return NaN;
@@ -64,7 +66,7 @@ export function matrixTable(m: NamedMatrix, o: TableOptions = {}): string {
     ? m.rows.filter((_, i) => m.values[i].some((v) => Number.isFinite(v) && v !== 0))
     : m.rows;
   const audit = new Set(o.auditCols ?? []);
-  const head = `<tr><th class="rh">${esc(o.corner ?? "")}</th>${m.cols.map((c) => `<th class="${audit.has(c) ? "audit" : ""}">${o.colLabels?.[c] ?? esc(c)}</th>`).join("")}</tr>`;
+  const head = `<tr><th class="rh">${esc(o.corner ?? "")}</th>${m.cols.map((c) => `<th class="num ${audit.has(c) ? "audit" : ""}">${o.colLabels?.[c] ?? esc(c)}</th>`).join("")}</tr>`;
   const body = rows.map((r) => {
     const i = m.rows.indexOf(r);
     const cells = m.cols.map((c, j) => {
@@ -78,9 +80,9 @@ export function matrixTable(m: NamedMatrix, o: TableOptions = {}): string {
 }
 
 /** Rows of arbitrary cells (already formatted) as an HTML table. */
-export function rowsTable(headers: string[], rows: (string | number)[][], o: { numeric?: boolean[]; rowClass?: (i: number) => string; auditCols?: number[] } = {}): string {
+export function rowsTable(headers: string[], rows: (string | number)[][], o: { numeric?: boolean[]; rowClass?: (i: number) => string; auditCols?: number[]; tableClass?: string } = {}): string {
   const audit = new Set(o.auditCols ?? []);
-  const head = `<tr>${headers.map((h, j) => `<th class="${audit.has(j) ? "audit" : ""}">${h}</th>`).join("")}</tr>`;
+  const head = `<tr>${headers.map((h, j) => `<th class="${o.numeric?.[j] ? "num" : ""} ${audit.has(j) ? "audit" : ""}">${h}</th>`).join("")}</tr>`;
   const body = rows.map((r, i) =>
     `<tr class="${o.rowClass?.(i) ?? ""}">${r.map((c, j) => {
       const numeric = o.numeric ? o.numeric[j] : typeof c === "number";
@@ -88,7 +90,7 @@ export function rowsTable(headers: string[], rows: (string | number)[][], o: { n
       return `<td class="${numeric ? "num" : ""} ${audit.has(j) ? "audit" : ""}">${text}</td>`;
     }).join("")}</tr>`,
   ).join("");
-  return `<div class="tblwrap"><table class="tbl"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  return `<div class="tblwrap"><table class="tbl ${o.tableClass ?? ""}"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
 }
 
 /** A NamedMatrix as tab-separated text, for the clipboard. */
@@ -103,13 +105,13 @@ const h3 = (t: string) => `<h3>${esc(t)}</h3>`;
 const h4 = (t: string) => `<h4>${esc(t)}</h4>`;
 const details = (summary: string, inner: string, open = false) =>
   `<details${open ? " open" : ""}><summary>${esc(summary)}</summary>${inner}</details>`;
-const tsvButton = (key: string) => `<button type="button" class="copy" data-tsv="${key}">Copy TSV</button>`;
+const tsvButton = (key: string, label: string) => `<button type="button" class="copy" data-tsv="${key}">Copy ${esc(label)} as TSV</button>`;
 
 /** β with weight by significance: bold when the CI excludes 0, muted otherwise. */
 const est = (v: number, sig: boolean | null): string =>
   sig === null ? fmt(v) : sig ? `<strong class="est">${fmt(v)}</strong>` : `<span class="ns">${fmt(v)}</span>`;
 
-const gateClass = (status: string) => (status === "fail" ? "gate-fail" : status === "warn" ? "gate-warn" : "");
+const gateClass = (a: AssessmentItem) => (worthALook(a) ? "gate-adv" : a.status === "fail" ? "gate-fail" : a.status === "warn" ? "gate-warn" : "");
 
 // ---------------------------------------------------------------------------
 // sections
@@ -145,14 +147,14 @@ function assessmentTable(items: AssessmentItem[], withStatus = true): string {
   return rowsTable(
     [withStatus ? "" : "", "Subject", "Criterion", "Value", "Rule", "Assessment"],
     items.map((a) => [
-      withStatus && a.kind === "gate" ? `<span class="badge ${a.status}">${STATUS_LABEL[a.status]}</span>` : "",
+      withStatus && a.kind === "gate" ? (worthALook(a) ? '<span class="badge adv">Worth a look</span>' : `<span class="badge ${a.status}">${STATUS_LABEL[a.status]}</span>`) : "",
       `<span class="nowrap">${esc(a.subject)}</span>`,
-      `<span class="nowrap">${esc(a.criterion)}</span>`,
+      esc(a.criterion),
       a.value === null ? "" : fmt(a.value),
       `<span class="rule">${esc(a.threshold)}</span>`,
       `${esc(a.message)} <span class="src">${esc(a.source)}</span>`,
     ]),
-    { numeric: [false, false, false, true, false, false], rowClass: (i) => (items[i].kind === "gate" ? gateClass(items[i].status) : "") },
+    { numeric: [false, false, false, true, false, false], rowClass: (i) => (items[i].kind === "gate" ? gateClass(items[i]) : ""), tableClass: "tbl-gates" },
   );
 }
 
@@ -174,7 +176,7 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
   const o = r.input.options;
   const alpha = o.bootstrap.alpha;
   const ciLabel = `${(100 * (1 - alpha)).toFixed(0)}% CI`;
-  const reg = (key: string, m: NamedMatrix) => { ctx.tsv[key] = matrixTsv(m); return tsvButton(key); };
+  const reg = (key: string, m: NamedMatrix, label: string) => { ctx.tsv[key] = matrixTsv(m); return tsvButton(key, label); };
   const gates = r.assessment.filter((a) => a.kind === "gate");
   const findings = r.assessment.filter((a) => a.kind === "finding");
   const bp = boot?.bootstrappedPaths;
@@ -195,15 +197,26 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
   // 1. Summary: verdict, gate problems, diagram
   // =========================================================================
   {
-    const measurementGates = gates.filter((g) => ["data", "reflective", "formative", "discriminant"].includes(g.section));
+    const measurementGates = gates.filter((g) => ["data", "reflective", "formative", "discriminant", "congruence"].includes(g.section));
     const mFail = measurementGates.filter((g) => g.status === "fail");
-    const mWarn = measurementGates.filter((g) => g.status === "warn");
-    const listSubjects = (xs: AssessmentItem[]) => [...new Set(xs.map((x) => `${x.criterion.replace(/ \(.*\)$/, "")} ${x.subject}`))].slice(0, 4).join("; ") + (xs.length > 4 ? "; …" : "");
+    const mWarn = measurementGates.filter((g) => g.status === "warn" && needsAction(g));
+    const mLook = measurementGates.filter(worthALook);
+    const listSubjects = (xs: AssessmentItem[], max = 3) => {
+      const names = [...new Set(xs.map((x) => `${x.criterion.replace(/ \(.*\)$/, "")} ${x.subject}`))];
+      return esc(names.slice(0, max).join("; ")) + (names.length > max ? ` and ${names.length - max} more` : "");
+    };
+    const lookText = (xs: AssessmentItem[]) => (xs.length ? ` <span class="v-adv">${xs.length} worth a look</span>: ${listSubjects(xs)}.` : "");
     const measurementVerdict = mFail.length
-      ? `<strong class="v-fail">${mFail.length} problem${mFail.length === 1 ? "" : "s"}</strong>${mWarn.length ? `, ${mWarn.length} to check` : ""}. ${esc(listSubjects(mFail))}.`
+      ? `<strong class="v-fail">${mFail.length} problem${mFail.length === 1 ? "" : "s"}</strong>${mWarn.length ? `, ${mWarn.length} to check` : ""}. ${listSubjects(mFail)}.${lookText(mLook)}`
       : mWarn.length
-        ? `<strong class="v-warn">${mWarn.length} to check</strong>. ${esc(listSubjects(mWarn))}.`
-        : `<strong class="v-ok">All gates passed.</strong>`;
+        ? `<strong class="v-warn">${mWarn.length} to check</strong>. ${listSubjects(mWarn)}.${lookText(mLook)}`
+        : `<strong class="v-ok">No action needed.</strong>${mLook.length ? lookText(mLook) : " All gates passed."}`;
+    const structuralGates = gates.filter((g) => g.section === "structural");
+    const sAct = structuralGates.filter(needsAction);
+    const sLook = structuralGates.filter(worthALook);
+    const collinearityText = sAct.length
+      ? ` <span class="v-warn">${sAct.length} collinearity ${sAct.length === 1 ? "gate" : "gates"} to check</span>: ${listSubjects(sAct)}.`
+      : sLook.length ? ` <span class="v-adv">Collinearity worth a look</span> (VIF 3–5): ${esc(sLook.map((g) => g.subject).join(", "))}.` : "";
 
     const nPaths = r.model.paths.length;
     const supported = r.model.paths.filter((p) => pathStat(p.from, p.to)?.sig).length;
@@ -211,6 +224,7 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
     const structuralVerdict = bp
       ? `<strong>${supported} of ${nPaths}</strong> paths supported at α = ${alpha}. R² of ${esc(keyTarget)} = <strong>${fmt(r2Key)}</strong>${r.model.paths.filter((p) => !pathStat(p.from, p.to)?.sig).length ? `. Not supported: ${esc(r.model.paths.filter((p) => !pathStat(p.from, p.to)?.sig).map((p) => `${p.from} → ${p.to}`).join(", "))}.` : "."}`
       : `${nPaths} paths estimated; R² of ${esc(keyTarget)} = <strong>${fmt(r2Key)}</strong>. Run the bootstrap to test them.`;
+    const structuralLine = structuralVerdict + collinearityText;
 
     let predictionVerdict = "Not run.";
     if (pr) {
@@ -218,11 +232,16 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
       const lm = cv ? cell(cv.lm, "Overall", "Diff") : NaN;
       const lmP = cv ? cell(cv.lm, "Overall", "Boot P Value") : NaN;
       predictionVerdict = v
-        ? `<strong>${POWER_LABEL[v.power].replace(/^./, (c) => c.toUpperCase())} predictive power</strong> for ${esc(pr.keyTarget)}: PLS beats the linear model on ${v.betterThanLm} of ${v.indicators} indicators.${v.worseThanNaive ? ` <span class="v-fail">${v.worseThanNaive} worse than the naive mean.</span>` : ""}${cv && Number.isFinite(lm) ? ` CVPAT vs LM: loss difference ${fmt(lm)}, p = ${pfmt(lmP)}.` : ""}`
+        ? `<strong>${POWER_LABEL[v.power].replace(/^./, (c) => c.toUpperCase())} predictive power</strong> for ${esc(pr.keyTarget)}: PLS beats the linear model on ${v.betterThanLm} of ${v.indicators} indicators.${v.worseThanNaive ? ` <span class="v-fail">${v.worseThanNaive} worse than the naive mean.</span>` : ""}${cv && Number.isFinite(lm) ? ` CVPAT vs LM: loss difference ${fmt(lm)}, ${pText(lmP)}.` : ""}`
         : "No endogenous indicators to predict.";
     } else if (r.predict && isStageError(r.predict)) {
       predictionVerdict = `Not available: ${esc(r.predict.error)}`;
     }
+
+    const sectionOrder = (g: AssessmentItem) => ["data", "reflective", "formative", "discriminant", "congruence", "structural", "prediction"].indexOf(g.section);
+    const byOrder = (a: AssessmentItem, b: AssessmentItem) => sectionOrder(a) - sectionOrder(b) || (a.status === "fail" ? 0 : 1) - (b.status === "fail" ? 0 : 1);
+    const actionGates = gates.filter(needsAction).sort(byOrder);
+    const lookGates = gates.filter(worthALook).sort(byOrder);
 
     const primary = boot && r.model.dotBoot ? "boot" : "model";
     const secondary = primary === "boot" ? "model" : null;
@@ -235,13 +254,14 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
       html: [
         `<div class="verdict">
           <div class="v-row"><span class="v-label">Measurement</span><span class="v-text">${measurementVerdict}</span></div>
-          <div class="v-row"><span class="v-label">Structural</span><span class="v-text">${structuralVerdict}</span></div>
+          <div class="v-row"><span class="v-label">Structural</span><span class="v-text">${structuralLine}</span></div>
           <div class="v-row"><span class="v-label">Prediction</span><span class="v-text">${predictionVerdict}</span></div>
         </div>`,
         note(`${r.data.nEstimation} cases · ${r.model.constructs.length} constructs · ${nPaths} paths · ${boot ? `${boot.nboot} bootstrap resamples, percentile ${ciLabel}` : "no bootstrap"}${pr ? ` · PLSpredict ${pr.noFolds}-fold` : ""}${cg ? " · congruence test" : ""}. Full run details at the end.`),
-        mFail.length || mWarn.length ? h3("Quality gates that need attention") : "",
-        mFail.length || mWarn.length ? assessmentTable([...mFail, ...mWarn]) : "",
-        mFail.length || mWarn.length ? note("Measurement problems come first because the structural results below assume the constructs measure what they claim. Fix or justify these before reading further.") : "",
+        actionGates.length ? h3("Quality gates that need action") : "",
+        actionGates.length ? assessmentTable(actionGates) : "",
+        actionGates.length ? note("Measurement problems come first because the structural results below assume the constructs measure what they claim. Fix or justify these before reading further.") : "",
+        lookGates.length ? details(`${lookGates.length} ${lookGates.length === 1 ? "check" : "checks"} worth a look — no action required`, assessmentTable(lookGates) + note("Each of these is within the rules; its assessment says why it is listed. Mention them where a reviewer would expect it, but nothing needs fixing.")) : "",
         h3(primary === "boot" ? "Model with bootstrap significance" : "Estimated model"),
         diagram(primary),
         primary === "boot" ? note("Path coefficients with bootstrap t-values and p-values, as seminr's <code>plot(boot_model)</code>. Stars: *** p &lt; 0.001, ** p &lt; 0.01, * p &lt; 0.05.") : note("Outer weights and loadings with path coefficients, as seminr's <code>plot(model)</code>."),
@@ -273,11 +293,11 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
       const adj = cell(s.paths, "AdjR^2", dv);
       const q2 = pr ? Object.entries(pr.q2Predict).filter(([it]) => pr.itemConstruct[it] === dv).map(([, v]) => v) : [];
       const label = r2 >= 0.75 ? "substantial" : r2 >= 0.5 ? "moderate" : r2 >= 0.25 ? "weak" : "low";
-      return [`<strong>${esc(dv)}</strong>${dv === keyTarget ? ' <span class="rule">key target</span>' : ""}`, r2, adj, `<span class="rule">${label}</span>`, q2.length ? `${fmt(Math.min(...q2))} – ${fmt(Math.max(...q2))}` : ""];
+      return [`<strong>${esc(dv)}</strong>${dv === keyTarget ? ' <span class="rule">key target</span>' : ""}`, r2, adj, `<span class="rule">${label}</span>`, q2.length ? (fmt(Math.min(...q2)) === fmt(Math.max(...q2)) ? fmt(q2[0]) : `${fmt(Math.min(...q2))} – ${fmt(Math.max(...q2))}`) : ""];
     });
 
     const vifRows = Object.entries(s.vifAntecedents).flatMap(([dv, ants]) => Object.entries(ants).map(([iv, v]) => [`<span class="nowrap">${esc(iv)} → ${esc(dv)}</span>`, v]));
-    const vifGate = (v: number) => (v >= 5 ? "gate-fail" : v >= 3 ? "gate-warn" : "");
+    const vifGate = (v: number) => (v >= 5 ? "gate-fail" : v >= 3 ? "gate-adv" : "");
 
     ctx.tsv.paths = matrixTsv(s.paths);
     ctx.tsv.fSquare = matrixTsv(s.fSquare);
@@ -317,7 +337,7 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
       html: [
         h3("Path coefficients"),
         rowsTable(headers, rows, { numeric }),
-        bp ? reg("bootPaths", bp) : tsvButton("paths"),
+        bp ? reg("bootPaths", bp, "path coefficients") : tsvButton("paths", "path coefficients"),
         bp
           ? note(`Standardised coefficients with percentile bootstrap intervals from ${boot!.nboot} resamples (two-tailed, α = ${alpha}). Bold: the interval excludes zero. f²: 0.02 small, 0.15 medium, 0.35 large (Cohen, 1988). A supported path with |β| below 0.10 is statistically real but practically trivial.`)
           : note("Point estimates only. Run the bootstrap for t-values, p-values and intervals."),
@@ -328,8 +348,8 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
         rowsTable(["Predictor → outcome", "VIF <span class='rule'>&lt; 3 ideal, &lt; 5 max</span>"], vifRows, { rowClass: (i) => vifGate(Number(vifRows[i][1])) }),
         slopesHtml,
         mediationHtml,
-        boot ? details("Total effects (direct + indirect)", matrixTable(boot.bootstrappedTotalPaths, { corner: "Path", auditCols: ["Bootstrap Mean", "Bootstrap SD", "T Stat."], colDigits: { "Bootstrap P Val": 3, "T Stat.": 2 } }) + reg("bootTotal", boot.bootstrappedTotalPaths)) : details("Total effects (point estimates)", matrixTable(s.totalEffects, { corner: "", dropEmptyRows: true })),
-        details("f² matrix", matrixTable(s.fSquare, { corner: "", dropEmptyRows: true }) + tsvButton("fSquare")),
+        boot ? details("Total effects (direct + indirect)", matrixTable(boot.bootstrappedTotalPaths, { corner: "Path", auditCols: ["Bootstrap Mean", "Bootstrap SD", "T Stat."], colDigits: { "Bootstrap P Val": 3, "T Stat.": 2 } }) + reg("bootTotal", boot.bootstrappedTotalPaths, "total effects")) : details("Total effects (point estimates)", matrixTable(s.totalEffects, { corner: "", dropEmptyRows: true })),
+        details("f² matrix", matrixTable(s.fSquare, { corner: "", dropEmptyRows: true }) + tsvButton("fSquare", "f²")),
         details("Information criteria (AIC, BIC per endogenous construct)", matrixTable(s.itCriteria, { corner: "" }) + note("For comparing competing models on the same data; lower is better. Use BIC or GM for model selection, not R².")),
       ].join(""),
     });
@@ -385,8 +405,8 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
         const label = `${it}  ->  ${c.name}`;
         const p = bw ? cell(bw, label, "Bootstrap P Val") : NaN;
         const sig = bw ? p < alpha : null;
-        const keep = sig === true ? "" : sig === false ? (Math.abs(l) >= 0.5 ? "gate-warn" : "gate-fail") : "";
-        const vc = vif >= 5 ? "gate-fail" : vif >= 3 ? "gate-warn" : "";
+        const keep = sig === true ? "" : sig === false ? (Math.abs(l) >= 0.5 ? "gate-adv" : "gate-fail") : "";
+        const vc = vif >= 5 ? "gate-fail" : vif >= 3 ? "gate-adv" : "";
         const row: (string | number)[] = [
           k === 0 ? `<strong>${esc(c.name)}</strong>` : "",
           `<span class="mono">${esc(it)}</span>`,
@@ -418,16 +438,20 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
     ctx.tsv.loadings = matrixTsv(s.loadings);
     ctx.tsv.weights = matrixTsv(s.weights);
 
-    const measurementGateProblems = gates.filter((g) => ["reflective", "formative", "discriminant"].includes(g.section) && (g.status === "fail" || g.status === "warn"));
+    const measurementGates = gates.filter((g) => ["reflective", "formative", "discriminant", "congruence"].includes(g.section));
+    const measurementGateProblems = measurementGates.filter(needsAction);
+    const measurementLook = measurementGates.filter(worthALook);
 
     out.push({
       id: "measurement",
       title: "Measurement model",
       html: [
-        measurementGateProblems.length === 0 ? note("<strong>All measurement gates passed.</strong> The tables below are the evidence.") : note(`${measurementGateProblems.length} gate${measurementGateProblems.length === 1 ? "" : "s"} need attention; they are highlighted in the tables below and listed in the summary.`),
+        measurementGateProblems.length === 0
+          ? note(`<strong>No measurement gate needs action.</strong>${measurementLook.length ? ` ${measurementLook.length} ${measurementLook.length === 1 ? "is" : "are"} worth a look (shaded blue below).` : ""} The tables below are the evidence.`)
+          : note(`${measurementGateProblems.length} gate${measurementGateProblems.length === 1 ? " needs" : "s need"} action; ${measurementGateProblems.length === 1 ? "it is" : "they are"} highlighted in the tables below and listed in the summary.${measurementLook.length ? ` ${measurementLook.length} more ${measurementLook.length === 1 ? "is" : "are"} worth a look (shaded blue).` : ""}`),
         refTable ? h3("Reflective and mode A constructs") : "",
         refTable,
-        refTable ? tsvButton("reliability") + tsvButton("loadings") : "",
+        refTable ? tsvButton("reliability", "reliability") + tsvButton("loadings", "loadings") : "",
         r.unidimensionality.length ? h4("Unidimensionality (Ch. 4.2)") : "",
         r.unidimensionality.length ? rowsTable(
           ["Construct", "Eigenvalues (PC1, PC2, …)", "Adjusted by parallel analysis <span class='rule'>only PC1 &gt; 1</span>", "Revelle's β", "α", "Verdict"],
@@ -438,7 +462,7 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
         refTable ? note("Loadings at or above 0.708 give indicator reliability of at least 0.50. Reliability (α, ρ<sub>A</sub>, ρ<sub>C</sub>) should fall between 0.70 and 0.95; above 0.95 the indicators are redundant. AVE at or above 0.50 establishes convergent validity. ρ<sub>ε</sub> is the correlation of the construct score with the first principal component of its own indicators; below 0.70 the inner weighting has displaced the score (interpretational confounding). Single-item constructs have no reliability statistics by construction.") : "",
         forTable ? h3("Formative and unit-weight constructs") : "",
         forTable,
-        forTable ? tsvButton("weights") : "",
+        forTable ? tsvButton("weights", "weights") : "",
         formative.length ? h4("Convergent validity: redundancy analysis (Ch. 5.3.1)") : "",
         formative.length ? (r.redundancy.length
           ? rowsTable(["Construct", "Global item", "Path <span class='rule'>≥ 0.70</span>", "R² <span class='rule'>≥ 0.50</span>"], r.redundancy.map((x) => [`<strong>${esc(x.construct)}</strong>`, `<span class="mono">${esc(x.globalItem)}</span>`, `<span class="${x.path < 0.7 ? "gate-fail" : ""}">${fmt(x.path)}</span>`, fmt(x.rSquared)]), { numeric: [false, false, true, true], rowClass: (i) => (r.redundancy[i].path < 0.7 ? "gate-fail" : "") })
@@ -446,17 +470,17 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
         formative.length && r.redundancy.length && r.redundancy.length < formative.length ? note(`No global item found for ${formative.filter((c) => !r.redundancy.some((x) => x.construct === c.name)).map((c) => c.name).join(", ")}.`) : "",
         forTable ? note("Read the weight's significance first. A non-significant weight with a loading of 0.50 or more still marks an absolutely important indicator (keep it); below 0.50, removal needs a content-validity argument. VIF above 5 destabilises the weights. ρ<sub>ε</sub> is the only reliability diagnostic available for a mode B composite. Convergent validity (redundancy analysis against a global item) cannot be assessed without that extra item.") : "",
         boot ? details("Bootstrapped loadings", matrixTable(boot.bootstrappedLoadings, { corner: "Indicator → construct", auditCols: ["Bootstrap Mean", "Bootstrap SD", "T Stat."], colDigits: { "Bootstrap P Val": 3, "T Stat.": 2 } })) : "",
-        details("Cross-loadings", matrixTable(s.validity.crossLoadings, { corner: "Indicator" }) + reg("crossLoadings", s.validity.crossLoadings) + note("Each indicator should load highest on its own construct.")),
+        details("Cross-loadings", matrixTable(s.validity.crossLoadings, { corner: "Indicator" }) + reg("crossLoadings", s.validity.crossLoadings, "cross-loadings") + note("Each indicator should load highest on its own construct.")),
 
         h3("Discriminant validity (HTMT)"),
-        matrixTable(htmtM, { corner: "", cellClass: (_r, _c, v) => (v >= 0.9 ? "gate-fail" : v >= 0.85 ? "gate-warn" : "") }),
-        reg("htmt", htmtM),
-        `<p class="note legend"><span class="sw gate-warn"></span> 0.85 – 0.90: acceptable only for conceptually similar constructs &nbsp; <span class="sw gate-fail"></span> ≥ 0.90: discriminant validity in doubt. Formative, single-item and interaction constructs are shown for reference but not assessed.</p>`,
-        htmtPairs.length ? h4("HTMT inference for reflective pairs (bootstrap, α = 0.10)") : "",
+        matrixTable(htmtM, { corner: "", cellClass: (rn, cn, v) => (!(reflectiveNames.has(rn) && reflectiveNames.has(cn)) ? "ns" : v >= 0.9 ? "gate-fail" : v >= 0.85 ? "gate-warn" : "") }),
+        reg("htmt", htmtM, "HTMT"),
+        `<p class="note legend"><span class="sw gate-warn"></span> 0.85 – 0.90: acceptable only for conceptually similar constructs &nbsp; <span class="sw gate-fail"></span> ≥ 0.90: discriminant validity in doubt. Grey values involve a formative, single-item or interaction construct: shown for reference, not assessed.</p>`,
+        htmtPairs.length ? `<h4>HTMT inference for reflective pairs (bootstrap, <span class="nocase">α</span> = 0.10)</h4>` : "",
         htmtPairs.length ? rowsTable(["Pair", "HTMT <span class='rule'>&lt; 0.85 / 0.90</span>", "90% interval <span class='rule'>95% one-sided upper bound below the threshold</span>"], htmtPairs.map((x) => x.row), { numeric: [false, true, false], rowClass: (i) => htmtPairs[i].cls }) : "",
-        htmtPairs.length ? reg("bootHtmt", bh!) : "",
+        htmtPairs.length ? reg("bootHtmt", bh!, "HTMT intervals") : "",
         htmtPairs.length ? note("As in the textbook (Ch. 4.6), the bootstrap summary for HTMT uses α = 0.10, so the upper bound is the 95% one-sided limit that should stay below the threshold (Ringle et al., 2023). Only pairs of reflective multi-item constructs are tested; HTMT is undefined for formative and single-item constructs. The engine computes the original HTMT; HTMT2 (Roemer, Schuberth &amp; Henseler, 2021), the criterion for unequal loadings, is not available here.") : "",
-        details("Fornell–Larcker criterion", matrixTable(s.validity.flCriteria, { corner: "" }) + reg("flCriteria", s.validity.flCriteria) + note("Square roots of AVE on the diagonal, construct correlations below it. Legacy criterion; rely on HTMT.")),
+        details("Fornell–Larcker criterion", matrixTable(s.validity.flCriteria, { corner: "" }) + reg("flCriteria", s.validity.flCriteria, "Fornell–Larcker") + note("Square roots of AVE on the diagonal, construct correlations below it. Legacy criterion; rely on HTMT.")),
 
         cg ? h3("Congruence in the nomological network") : "",
         cg ? (() => {
@@ -469,7 +493,7 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
           ctx.tsv.congruence = ["pair\testimate\tdiff\tboot_sd\tt\tci_lo\tci_hi\tsignificant\thtmt_based", ...cg.rows.map((row, i) => [row.pair, row.estimate, row.diff, row.bootSD, row.tStat ?? "", row.ciLo, row.ciHi, row.significant, cg.htmtRows?.[i].estimate ?? ""].join("\t"))].join("\n");
           return [
             rowsTable(["Pair", `Congruence <span class='rule'>&lt; ${cg.threshold}</span>`, `${cg.loLabel.replace(" CI", "")}–${cg.hiLabel}`, "Verdict", "HTMT-based (point est.)", "Boot SD", "t"], rows, { numeric: [false, true, false, false, true, true, true], rowClass: (i) => (cg.rows[i].significant ? "" : "gate-warn"), auditCols: [5, 6] }),
-            tsvButton("congruence"),
+            tsvButton("congruence", "congruence test"),
             note(`${cg.rows.length} pairs, ${cg.nboot} resamples, ${cg.diagonal === "rhoA" ? "ρ<sub>A</sub>" : "ρ<sub>C</sub>"} on the diagonal. ${nonSig === 0 ? "Every pair is empirically distinguishable." : `${nonSig} pair${nonSig === 1 ? "" : "s"} cannot be distinguished from the threshold: redundancy in the nomological network cannot be ruled out.`} A pair is distinguishable when the whole interval lies below the threshold (Franke, Sarstedt &amp; Danks, 2021). The HTMT-based column is congruence over the disattenuated HTMT matrix, a point estimate for comparison rather than a second test.`),
           ].join("");
         })() : "",
@@ -510,24 +534,35 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
         rowsTable(["Endogenous construct", "Indicators where PLS RMSE &lt; LM RMSE", "Indicators worse than the naive mean", "Predictive power"], verdictRows, { numeric: [false, false, false, false] }),
         note(`${pr.noFolds}-fold cross-validation, ${pr.technique === "predict_DA" ? "direct" : "earliest"} antecedents scheme, seed ${pr.seed}. Verdict rule (Shmueli et al., 2019): PLS below the linear-model benchmark on all indicators → high; the majority → medium; a minority → low; none → no predictive power. Judge the model on its key target construct, not on every construct at once.`),
         rowsTable(["Construct", "Indicator", "PLS RMSE", "LM RMSE", "Naive RMSE", "Q²predict <span class='rule'>&gt; 0</span>", "PLS MAE", "LM MAE"], rows.map((x) => x.row), { numeric: [false, false, true, true, true, true, true, true], rowClass: (i) => rows[i].cls, auditCols: [6, 7] }),
+        tsvButton("plsPredict", "PLSpredict"),
         note("Bold PLS RMSE: lower than the linear-model benchmark. Naive RMSE predicts each indicator by its whole-sample mean; a PLS RMSE above it means the model predicts that indicator worse than its average. Q²predict is 1 − PLS MSE / naive MSE against the same benchmark, slightly stricter than the fold-wise mean SmartPLS uses."),
         details("Construct-level prediction error", matrixTable(pr.constructError, { corner: "" }) + note("In-sample (IS) and out-of-sample (OOS) MSE/MAE of the construct scores; the overfit ratio compares the two.")),
       );
       ctx.tsv.plsPredict = ["construct\tindicator\tPLS_RMSE\tLM_RMSE\tnaive_RMSE\tQ2predict\tPLS_MAE\tLM_MAE", ...items.map((it) => [pr.itemConstruct[it], it, rmse(pr.plsOutOfSample, it), rmse(pr.lmOutOfSample, it), pr.naiveRmse[it], pr.q2Predict[it], mae(pr.plsOutOfSample, it), mae(pr.lmOutOfSample, it)].map((v) => (typeof v === "number" ? v.toFixed(6) : v)).join("\t"))].join("\n");
-      html.push(tsvButton("plsPredict"));
     } else if (r.predict && isStageError(r.predict)) {
       html.push(`<div class="callout">PLSpredict could not run: ${esc(r.predict.error)}</div>`);
     }
     if (cv) {
-      const cvClass = (_r: string, c: string, v: number) => (c === "Diff" ? (v < 0 ? "est" : "ns") : "");
+      const cvTable = (m: NamedMatrix, bench: string) => rowsTable(
+        ["Construct", "PLS loss", `${bench} loss`, "Difference <span class='rule'>&lt; 0 favours PLS</span>", "t", `p <span class='rule'>&lt; ${alpha}</span>`],
+        m.rows.map((row) => {
+          const d = cell(m, row, "Diff");
+          return [row === "Overall" ? "<strong>Overall</strong>" : esc(row), fmt(cell(m, row, m.cols[0])), fmt(cell(m, row, m.cols[1])), d < 0 ? `<strong class="est">${fmt(d)}</strong>` : `<span class="ns">${fmt(d)}</span>`, fmt(cell(m, row, "Boot T value"), 2), pfmt(cell(m, row, "Boot P Value"))];
+        }),
+        { numeric: [false, true, true, true, true, true], auditCols: [4] },
+      );
+      ctx.tsv.cvpatIa = matrixTsv(cv.ia);
       html.push(
         h3("CVPAT"),
-        matrixTable(cv.ia, { corner: "vs indicator average", cellClass: cvClass, auditCols: ["Boot T value"], colDigits: { "Boot P Value": 3 } }),
-        matrixTable(cv.lm, { corner: "vs linear model", cellClass: cvClass, auditCols: ["Boot T value"], colDigits: { "Boot P Value": 3 } }),
+        h4("Against the indicator average"),
+        cvTable(cv.ia, "Indicator average"),
+        tsvButton("cvpatIa", "CVPAT vs indicator average"),
+        h4("Against the linear model"),
+        cvTable(cv.lm, "Linear model"),
         note(`Cross-validated predictive ability test, ${cv.nboot} bootstrap resamples. A negative difference means PLS has the lower average loss; the p-value tests it. Beating the indicator average establishes predictive validity (the floor); beating the linear model is the stronger claim, and part of any advantage there can be regularisation from compressing many indicators into few composites (Liengaard et al., 2021; Sharma et al., 2023).`),
       );
       ctx.tsv.cvpatLm = matrixTsv(cv.lm);
-      html.push(tsvButton("cvpatLm"));
+      html.push(tsvButton("cvpatLm", "CVPAT vs linear model"));
     } else if (r.cvpat && isStageError(r.cvpat)) {
       html.push(`<div class="callout">CVPAT could not run: ${esc(r.cvpat.error)}</div>`);
     }
@@ -547,9 +582,9 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
       html: [
         h3("Construct correlations"),
         matrixTable(d.correlations.constructs, { corner: "" }),
-        tsvButton("constructCor"),
+        tsvButton("constructCor", "construct correlations"),
         details("Construct score statistics", matrixTable(d.statistics.constructs, { corner: "" })),
-        details("Indicator statistics", matrixTable(d.statistics.items, { corner: "Indicator", colDigits: { "No.": 0, Missing: 0 } }) + tsvButton("itemStats")),
+        details("Indicator statistics", matrixTable(d.statistics.items, { corner: "Indicator", colDigits: { "No.": 0, Missing: 0 } }) + tsvButton("itemStats", "indicator statistics")),
         details("Indicator correlations", matrixTable(d.correlations.items, { corner: "" })),
       ].join(""),
     });
@@ -590,7 +625,7 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
         warnings.length ? `<div class="callout">${warnings.map((w) => `<p>${esc(w)}</p>`).join("")}</div>` : "",
         h3("Constructs"),
         constructsTable(r.model.constructs),
-        details(`All ${gates.length} quality gates (${tally.fail} problems, ${tally.warn} to check, ${tally.ok} passed, ${tally.info} notes)`, bySection(gates)),
+        details(`All ${gates.length} quality gates (${tally.fail} problems, ${tally.warn} to check, ${tally.advisory} worth a look, ${tally.ok} passed, ${tally.info} notes)`, bySection(gates)),
         details(`All ${findings.length} findings in words`, bySection(findings)),
         h3("Reproduce in R"),
         note("The same model and options with seminr and seminrExtras. Point <code>read.csv()</code> at your file."),
@@ -608,8 +643,8 @@ export function renderSections(r: AnalysisResult, ctx: RenderContext): ReportSec
 // ---------------------------------------------------------------------------
 
 export const REPORT_CSS = `
-.report{--fg:#18181b;--muted:#52525b;--line:#e4e4e7;--bg:#fff;--head:#f4f4f5;--ok:#047857;--okbg:#ecfdf5;--warn:#b45309;--warnbg:#fffbeb;--fail:#b91c1c;--failbg:#fef2f2;--info:#3f3f46;--infobg:#f4f4f5;--accent:#c2410c;color:var(--fg);font-size:14px;line-height:1.5}
-.dark .report{--fg:#f4f4f5;--muted:#a1a1aa;--line:#27272a;--bg:#18181b;--head:#27272a;--ok:#6ee7b7;--okbg:#064e3b55;--warn:#fcd34d;--warnbg:#78350f55;--fail:#fca5a5;--failbg:#7f1d1d55;--info:#d4d4d8;--infobg:#27272a;--accent:#fb923c}
+.report{--fg:#18181b;--muted:#52525b;--line:#e4e4e7;--bg:#fff;--head:#f4f4f5;--ok:#047857;--okbg:#ecfdf5;--warn:#b45309;--warnbg:#fffbeb;--fail:#b91c1c;--failbg:#fef2f2;--info:#3f3f46;--infobg:#f4f4f5;--accent:#c2410c;--adv:#1d4ed8;--advbg:#eff6ff;color:var(--fg);font-size:14px;line-height:1.5}
+.dark .report{--fg:#f4f4f5;--muted:#a1a1aa;--line:#27272a;--bg:#18181b;--head:#27272a;--ok:#6ee7b7;--okbg:#064e3b55;--warn:#fcd34d;--warnbg:#78350f55;--fail:#fca5a5;--failbg:#7f1d1d55;--info:#d4d4d8;--infobg:#27272a;--accent:#fb923c;--adv:#93c5fd;--advbg:#1e3a8a44}
 .report h2{font-size:1.35rem;font-weight:700;margin:2.5rem 0 1rem;padding-top:1rem;border-top:1px solid var(--line)}
 .report h3{font-size:1.05rem;font-weight:600;margin:1.75rem 0 .5rem}
 .report h4{font-size:.85rem;font-weight:600;margin:1.25rem 0 .5rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
@@ -623,16 +658,22 @@ export const REPORT_CSS = `
 .report .v-fail{color:var(--fail)}
 .report .v-warn{color:var(--warn)}
 .report .v-ok{color:var(--ok)}
+.report .v-adv{color:var(--adv);font-weight:600}
+.report .nocase{text-transform:none}
 .report .tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:.5rem;margin:.5rem 0;background:var(--bg)}
 .report table.tbl{border-collapse:collapse;width:100%;font-size:.85rem}
 .report .tbl th{background:var(--head);text-align:left;padding:.45rem .6rem;font-weight:600;white-space:nowrap;border-bottom:1px solid var(--line);vertical-align:bottom}
 .report .tbl th.rh{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:500;font-size:.8rem}
 .report .tbl td{padding:.4rem .6rem;border-top:1px solid var(--line);vertical-align:top}
+.report .tbl th.num{text-align:right}
 .report .tbl td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .report .tbl tbody th.rh{background:transparent;border-top:1px solid var(--line);white-space:nowrap}
 .report .tbl .audit,.report .tbl th.audit{color:var(--muted);font-weight:400;font-size:.8rem}
 .report .tbl tr.gate-fail td,.report .tbl tr.gate-fail th{background:var(--failbg)}
 .report .tbl tr.gate-warn td,.report .tbl tr.gate-warn th{background:var(--warnbg)}
+.report .tbl tr.gate-adv td,.report .tbl tr.gate-adv th{background:var(--advbg)}
+.report span.gate-adv{color:var(--adv);font-weight:600}
+.report table.tbl-gates td:last-child{min-width:20rem}
 .report .gate-fail{color:var(--fail);font-weight:600}
 .report .gate-warn{color:var(--warn);font-weight:600}
 .report td.gate-fail,.report td.gate-warn{font-weight:600}
@@ -643,6 +684,7 @@ export const REPORT_CSS = `
 .report .badge.warn{color:var(--warn);background:var(--warnbg)}
 .report .badge.fail{color:var(--fail);background:var(--failbg)}
 .report .badge.info{color:var(--info);background:var(--infobg)}
+.report .badge.adv{color:var(--adv);background:var(--advbg)}
 .report .rule{color:var(--muted);font-size:.78rem;font-weight:400}
 .report .src{display:block;color:var(--muted);font-size:.75rem;margin-top:.15rem}
 .report .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem}
@@ -655,6 +697,14 @@ export const REPORT_CSS = `
 .report details[open]>summary{margin-bottom:.5rem}
 .report .diagram{background:#fff;border:1px solid var(--line);border-radius:.5rem;padding:1rem;overflow:auto;margin:.5rem 0}
 .report .diagram svg{max-width:100%;height:auto}
+.report .diagram.diagram-tall svg{width:100%;height:65vh}
+.report button.diagram-expand{margin-top:0}
+.diagram-dialog{width:min(96vw,1400px);max-width:none;height:92vh;max-height:none;padding:0;border:1px solid var(--line);border-radius:.75rem;background:var(--bg);color:var(--fg)}
+.diagram-dialog::backdrop{background:#0009}
+.diagram-dialog .dd-bar{display:flex;gap:.5rem;align-items:center;padding:.5rem .75rem;border-bottom:1px solid var(--line)}
+.diagram-dialog .dd-bar button{font:inherit;font-size:.85rem;padding:.25rem .7rem;border:1px solid var(--line);border-radius:.4rem;background:var(--head);color:var(--fg);cursor:pointer}
+.diagram-dialog .dd-bar .dd-close{margin-left:auto}
+.diagram-dialog .dd-body{overflow:auto;height:calc(92vh - 3rem);background:#fff}
 .report pre.code{background:var(--head);border:1px solid var(--line);border-radius:.5rem;padding:1rem;overflow-x:auto;font-size:.8rem;line-height:1.45}
 .report button.copy{font:inherit;font-size:.75rem;padding:.2rem .6rem;border:1px solid var(--line);border-radius:.4rem;background:var(--head);color:var(--fg);cursor:pointer;margin:.25rem .25rem .75rem 0}
 .report button.copy:hover{border-color:var(--accent)}
@@ -669,7 +719,19 @@ export const REPORT_CSS = `
 .report .msg details{margin:.4rem 0}
 .report .msg ul.compare{margin:.2rem 0 .4rem 1.1rem;font-size:.85rem}
 .report .msg .body .tblwrap{margin:.5rem 0}
-@media (max-width:640px){.report .v-row{flex-direction:column;gap:.2rem}.report .v-label{flex:none}}
+@media (max-width:640px){.report .v-row{flex-direction:column;gap:.2rem}.report .v-label{flex:none}
+.report table.tbl-gates thead{display:none}
+.report table.tbl-gates,.report table.tbl-gates tbody{display:block}
+.report table.tbl-gates tr{display:grid;grid-template-columns:auto 1fr auto;gap:.2rem .6rem;align-items:baseline;padding:.6rem .75rem;border-top:1px solid var(--line)}
+.report table.tbl-gates tr:first-child{border-top:none}
+.report table.tbl-gates tr.gate-fail{background:var(--failbg)}
+.report table.tbl-gates tr.gate-warn{background:var(--warnbg)}
+.report table.tbl-gates tr.gate-adv{background:var(--advbg)}
+.report table.tbl-gates td{display:block;border:none;padding:0;min-width:0;background:transparent!important}
+.report table.tbl-gates td:nth-child(3){order:1;grid-column:1/-1;font-weight:600}
+.report table.tbl-gates td:nth-child(5){order:2;grid-column:1/-1}
+.report table.tbl-gates td:nth-child(6){order:3;grid-column:1/-1;min-width:0}
+.report table.tbl-gates .nowrap{white-space:normal}}
 @media print{.report button.copy{display:none}.report details{border:none;padding:0}.report details>summary{display:none}.report details:not([open])>*:not(summary){display:block}}
 `;
 

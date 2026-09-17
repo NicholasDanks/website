@@ -924,6 +924,6 @@ export async function runAnalysis(input: AnalysisInput, hooks: AnalysisHooks = {
   stage("assess", "start");
   result.assessment = timed("assess", () => assessAnalysis(result));
   result.rScript = generateRScript(parsed, options, input.dataName);
-  stage("assess", "done", `${result.assessment.length} checks`);
+  stage("assess", "done", `${result.assessment.filter((x) => x.kind === "gate").length} quality gates, ${result.assessment.filter((x) => x.kind === "finding").length} findings`);
   return result;
 }

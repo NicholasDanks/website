@@ -11,11 +11,13 @@ const label = "block text-sm text-surface-700 dark:text-surface-300";
 const card =
   "mb-6 p-6 rounded-xl bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800";
 const toggle = "inline-flex items-center gap-2 text-sm font-medium text-surface-800 dark:text-surface-200";
+const demoBtn =
+  "inline-flex items-center gap-2 font-medium rounded-lg px-3 py-2 text-sm bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 transition-all";
 ---
 
 <PageLayout
   title="SEMinR in the browser — PLS-SEM estimation — Nicholas P. Danks"
-  description="Estimate, bootstrap, and assess a PLS-SEM model from SEMinR code and your own data, entirely in your browser: reliability, HTMT, path coefficients, mediation, PLSpredict, CVPAT, the congruence test, and a downloadable report. Nothing you paste is transmitted anywhere."
+  description="Estimate, bootstrap, and assess a PLS-SEM model from SEMinR code and your own data, entirely in your browser: reliability, HTMT, path coefficients, mediation, PLSpredict, CVPAT, the congruence test, and a downloadable report. Your data never leaves your browser."
 >
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
     <header class="mb-8">
@@ -32,35 +34,37 @@ const toggle = "inline-flex items-center gap-2 text-sm font-medium text-surface-
         estimates the PLS-SEM model, bootstraps it, runs PLSpredict, CVPAT and the
         congruence test, checks every result against the textbook thresholds, draws the
         path diagram, and gives you a report, the numbers, and the R script to reproduce
-        it all. No R, no install. Try the two textbook demos below, or paste your own model.
+        it all. No R, no install.
       </p>
     </header>
 
-    <!-- Privacy panel -->
-    <section class="mb-10 p-6 rounded-xl border border-accent-200 dark:border-accent-800 bg-accent-50/50 dark:bg-accent-900/20">
-      <h2 class="text-base font-semibold text-surface-900 dark:text-surface-100 mb-3">
-        Your data never leaves your computer
-      </h2>
-      <div class="space-y-3 text-sm text-surface-700 dark:text-surface-300 leading-relaxed">
-        <p>
-          Everything &mdash; estimation, every bootstrap resample, every cross-validation
-          fold &mdash; runs inside your browser on your own machine, spread across
-          your processor's cores. There is no upload,
-          no server, no account, and no logging. <strong>Nothing you paste is ever
-          transmitted anywhere.</strong> Once the page has loaded, the only request it can
-          make is for the bundled demo dataset, and only if you press &ldquo;Load demo&rdquo;.
-          Disconnect from the internet and it still works.
+    <!-- Demos -->
+    <section class="mb-4 p-4 rounded-xl border border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900 flex flex-wrap items-center gap-3" aria-label="Textbook demos">
+      <span class="text-sm font-semibold text-surface-900 dark:text-surface-100">Try a textbook demo:</span>
+      <button type="button" data-demo="corp-rep" class={demoBtn}>Corporate reputation</button>
+      <button type="button" data-demo="moderation" class={demoBtn}>Moderation (CUSA × SC)</button>
+      <span class="text-xs text-surface-500 dark:text-surface-400">Fills in the data and the model below; then press &ldquo;Run the full analysis&rdquo;. Or paste your own.</span>
+    </section>
+
+    <!-- Privacy -->
+    <section class="mb-8 px-4 py-3 rounded-xl border border-accent-200 dark:border-accent-800 bg-accent-50/50 dark:bg-accent-900/20 text-sm text-surface-700 dark:text-surface-300 leading-relaxed">
+      <p>
+        <strong class="text-surface-900 dark:text-surface-100">Your data never leaves your computer.</strong>
+        Estimation, every bootstrap resample and every cross-validation fold run in your
+        browser, on your own processor. No upload, no server, no account, no logging.
+      </p>
+      <details class="mt-1">
+        <summary class="cursor-pointer text-accent-700 dark:text-accent-400">What the page can and cannot send</summary>
+        <p class="mt-2">
+          Apart from loading its own code from this site, the page makes two kinds of
+          request, and only when you ask for them: the bundled demo dataset, when you press
+          a demo button, and the optional Gemini review, which receives aggregate statistics
+          and column <em>names</em>, never rows (the exact text is under &ldquo;What leaves
+          the browser&rdquo; once you have run a model). Nothing you paste is sent anywhere
+          else. Disconnect from the internet after the page has loaded and the analysis
+          still works.
         </p>
-        <p>
-          The engine is the open-source TypeScript port of SEMinR and seminrExtras.
-          Point estimates, the summary tables and PLSpredict reproduce R exactly
-          (PLSpredict includes R's fold shuffle for a given seed). The bootstrap uses
-          R's random number generator too, but seminr draws its resamples on a
-          parallel stream, so intervals agree with R to Monte Carlo error, not digit
-          for digit. The congruence test with rho<sub>C</sub> is bit-identical to
-          <code>seminrExtras::congruence_test()</code>.
-        </p>
-      </div>
+      </details>
     </section>
 
     <div class="grid lg:grid-cols-2 gap-6">
@@ -213,17 +217,8 @@ const toggle = "inline-flex items-center gap-2 text-sm font-medium text-surface-
         class="inline-flex items-center gap-2 font-semibold rounded-lg px-4 py-3 text-sm bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 transition-all disabled:opacity-50">
         Quick look
       </button>
-      <span class="text-xs text-surface-500 dark:text-surface-400">Demo:</span>
-      <button type="button" data-demo="corp-rep"
-        class="inline-flex items-center gap-2 font-medium rounded-lg px-3 py-2 text-sm bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 transition-all">
-        Corporate reputation
-      </button>
-      <button type="button" data-demo="moderation"
-        class="inline-flex items-center gap-2 font-medium rounded-lg px-3 py-2 text-sm bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 transition-all">
-        Moderation (CUSA × SC)
-      </button>
       <button id="cancel" type="button"
-        class="hidden inline-flex items-center gap-2 font-medium rounded-lg px-4 py-3 text-sm text-surface-600 dark:text-surface-400 hover:text-red-600">
+        class="hidden [&:not(.hidden)]:inline-flex items-center gap-2 font-medium rounded-lg px-4 py-3 text-sm text-surface-600 dark:text-surface-400 hover:text-red-600">
         Cancel
       </button>
       <span id="elapsed" class="text-xs text-surface-500 dark:text-surface-400"></span>
@@ -237,7 +232,7 @@ const toggle = "inline-flex items-center gap-2 text-sm font-medium text-surface-
 
     <section id="results" class="hidden">
       <div class="sticky top-16 z-30 -mx-4 px-4 py-1.5 glass flex flex-wrap items-center gap-x-2 gap-y-1">
-        <nav id="results-nav" class="flex flex-wrap items-center" aria-label="Results sections"></nav>
+        <nav id="results-nav" class="flex items-center max-sm:w-full max-sm:overflow-x-auto sm:flex-wrap" aria-label="Results sections"></nav>
         <div class="ml-auto flex flex-wrap items-center gap-1.5">
           <button id="download-html" type="button" class="text-xs font-semibold rounded-md px-2.5 py-1 bg-accent-700 text-white hover:bg-accent-800">Download report</button>
           <button id="download-json" type="button" class="text-xs font-medium rounded-md px-2.5 py-1 bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700">JSON</button>
@@ -245,79 +240,81 @@ const toggle = "inline-flex items-center gap-2 text-sm font-medium text-surface-
           <button id="download-svg" type="button" class="hidden text-xs font-medium rounded-md px-2.5 py-1 bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700">Diagram SVG</button>
         </div>
       </div>
-      <div id="results-body" class="report"></div>
-    </section>
+      <div id="results-summary" class="report"></div>
 
-    <!-- Evaluation assistant -->
-    <section id="evaluate" class="hidden mt-12 p-6 rounded-xl border border-accent-200 dark:border-accent-800 bg-accent-50/40 dark:bg-accent-900/10">
-      <h2 class="text-xl font-bold text-surface-900 dark:text-surface-50 mb-2">Ask Gemini to review this model</h2>
-      <p class="text-sm text-surface-700 dark:text-surface-300 leading-relaxed max-w-3xl mb-3">
-        A Gemini model reads the aggregate results above, assesses them against the PLS-SEM
-        literature, and tests the improvements it proposes by asking this page to
-        re-estimate alternative specifications. Those runs happen here, in your browser,
-        on your data; the model only ever receives aggregate statistics.
-      </p>
-      <ul class="text-sm text-surface-700 dark:text-surface-300 list-disc pl-5 mb-4 space-y-1 max-w-3xl">
-        <li><strong>Your data never leaves your computer.</strong> What is sent is the digest under &ldquo;What leaves the browser&rdquo;: reliability, loadings, paths, intervals, verdicts and column <em>names</em>. No rows, scores or residuals exist in it.</li>
-        <li><strong>Free to use.</strong> This page carries a Gemini key of its own on Google's free tier, so the review costs you nothing. Requests go from your browser straight to <code>generativelanguage.googleapis.com</code>; there is no server in between. The free tier lets Google use what is sent (the aggregate digest, never your data) to improve its products.</li>
-        <li><strong>Or your own key.</strong> If the shared free-tier limit is busy, or you would rather the digest went through your own Google account, paste a <a href="https://aistudio.google.com/apikey" rel="noopener" class="underline">Gemini API key</a> of your own below. It is kept in this tab unless you tick &ldquo;remember on this device&rdquo;. On a billed project a full review costs a few cents at <a href="https://ai.google.dev/gemini-api/docs/pricing" rel="noopener" class="underline">Google's list prices</a>, and Google does not use the content.</li>
-      </ul>
+      <!-- Evaluation assistant -->
+      <section id="evaluate" class="hidden scroll-mt-28 mt-10 mb-4 p-6 rounded-xl border border-accent-200 dark:border-accent-800 bg-accent-50/40 dark:bg-accent-900/10">
+        <h2 class="text-xl font-bold text-surface-900 dark:text-surface-50 mb-2">Ask Gemini to review this model</h2>
+        <p class="text-sm text-surface-700 dark:text-surface-300 leading-relaxed max-w-3xl mb-3">
+          A Gemini model reads the aggregate results of this run, assesses them against the PLS-SEM
+          literature, and tests the improvements it proposes by asking this page to
+          re-estimate alternative specifications. Those runs happen here, in your browser,
+          on your data; the model only ever receives aggregate statistics.
+        </p>
+        <ul class="text-sm text-surface-700 dark:text-surface-300 list-disc pl-5 mb-4 space-y-1 max-w-3xl">
+          <li><strong>Your data never leaves your computer.</strong> What is sent is the digest under &ldquo;What leaves the browser&rdquo;: reliability, loadings, paths, intervals, verdicts and column <em>names</em>. No rows, scores or residuals exist in it.</li>
+          <li><strong>Free to use.</strong> This page carries a Gemini key of its own on Google's free tier, so the review costs you nothing. Requests go from your browser straight to <code>generativelanguage.googleapis.com</code>; there is no server in between. The free tier lets Google use what is sent (the aggregate digest, never your data) to improve its products.</li>
+          <li><strong>Or your own key.</strong> If the shared free-tier limit is busy, or you would rather the digest went through your own Google account, paste a <a href="https://aistudio.google.com/apikey" rel="noopener" class="underline">Gemini API key</a> of your own below. It is kept in this tab unless you tick &ldquo;remember on this device&rdquo;. On a billed project a full review costs a few cents at <a href="https://ai.google.dev/gemini-api/docs/pricing" rel="noopener" class="underline">Google's list prices</a>, and Google does not use the content.</li>
+        </ul>
 
-      <div class="flex flex-wrap items-end gap-3 mb-3">
-        <label class="block text-sm text-surface-700 dark:text-surface-300">Model
-          <select id="eval-model" class={field}>
-            <option value="gemini-3.8-flash">Gemini 3.8 Flash (newest, fast)</option>
-            <option value="gemini-3.6-flash">Gemini 3.6 Flash (fast)</option>
-            <option value="gemini-pro-latest">Gemini Pro, latest (slower, more careful)</option>
-          </select>
-        </label>
-        <p id="key-mode" class="text-sm text-surface-600 dark:text-surface-400 pb-2 hidden">Using this site's free key.</p>
-      </div>
-
-      <details id="own-key" class="mb-3">
-        <summary class="cursor-pointer text-sm font-medium text-surface-800 dark:text-surface-200">Use your own Gemini API key instead</summary>
-        <div class="flex flex-wrap items-end gap-3 mt-2">
-          <label class="block text-sm text-surface-700 dark:text-surface-300 grow max-w-md">Gemini API key
-            <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…" class={field} />
+        <div class="flex flex-wrap items-end gap-3 mb-3">
+          <label class="block text-sm text-surface-700 dark:text-surface-300">Model
+            <select id="eval-model" class={field}>
+              <option value="gemini-3.8-flash">Gemini 3.8 Flash (newest, fast)</option>
+              <option value="gemini-3.6-flash">Gemini 3.6 Flash (fast)</option>
+              <option value="gemini-pro-latest">Gemini Pro, latest (slower, more careful)</option>
+            </select>
           </label>
-          <label class="inline-flex items-center gap-2 text-sm text-surface-700 dark:text-surface-300 pb-2">
-            <input id="remember-key" type="checkbox" /> remember on this device
-          </label>
-          <button id="eval-forget" type="button" class="text-xs text-surface-500 dark:text-surface-400 underline pb-2">forget key</button>
+          <p id="key-mode" class="text-sm text-surface-600 dark:text-surface-400 pb-2 hidden">Using this site's free key.</p>
         </div>
-      </details>
 
-      <div class="flex flex-wrap items-center gap-3 mb-3">
-        <button id="eval-start" type="button"
-          class="inline-flex items-center gap-2 font-semibold rounded-lg px-5 py-2.5 text-sm bg-accent-700 text-white hover:bg-accent-800 shadow-sm disabled:opacity-50">
-          Evaluate this model
-        </button>
-        <button id="eval-show-digest" type="button"
-          class="inline-flex items-center gap-2 font-medium rounded-lg px-3 py-2 text-sm bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700">
-          What leaves the browser
-        </button>
-        <button id="eval-stop" type="button" class="hidden text-sm font-medium text-red-700 dark:text-red-300 underline">Stop</button>
-        <span id="eval-status" class="text-xs text-surface-500 dark:text-surface-400"></span>
-      </div>
-      <div id="eval-working" class="hidden mb-3 flex items-center gap-3 p-3 rounded-lg border border-accent-300 dark:border-accent-700 bg-white dark:bg-surface-900 text-sm">
-        <span class="inline-block w-4 h-4 rounded-full border-2 border-accent-600 border-t-transparent animate-spin" aria-hidden="true"></span>
-        <span class="phase font-medium text-surface-800 dark:text-surface-200">Working…</span>
-        <span class="elapsed ml-auto font-mono text-xs text-surface-500 dark:text-surface-400"></span>
-      </div>
-      <pre id="eval-digest" class="hidden text-xs p-3 mb-3 rounded-lg border border-surface-300 dark:border-surface-700 bg-white dark:bg-surface-950 text-surface-800 dark:text-surface-200 max-h-96 overflow-auto whitespace-pre-wrap"></pre>
+        <details id="own-key" class="mb-3">
+          <summary class="cursor-pointer text-sm font-medium text-surface-800 dark:text-surface-200">Use your own Gemini API key instead</summary>
+          <div class="flex flex-wrap items-end gap-3 mt-2">
+            <label class="block text-sm text-surface-700 dark:text-surface-300 grow max-w-md">Gemini API key
+              <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…" class={field} />
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm text-surface-700 dark:text-surface-300 pb-2">
+              <input id="remember-key" type="checkbox" /> remember on this device
+            </label>
+            <button id="eval-forget" type="button" class="text-xs text-surface-500 dark:text-surface-400 underline pb-2">forget key</button>
+          </div>
+        </details>
 
-      <div id="eval-transcript" class="report space-y-4 mb-4"></div>
+        <div class="flex flex-wrap items-center gap-3 mb-3">
+          <button id="eval-start" type="button"
+            class="inline-flex items-center gap-2 font-semibold rounded-lg px-5 py-2.5 text-sm bg-accent-700 text-white hover:bg-accent-800 shadow-sm disabled:opacity-50">
+            Evaluate this model
+          </button>
+          <button id="eval-show-digest" type="button"
+            class="inline-flex items-center gap-2 font-medium rounded-lg px-3 py-2 text-sm bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700">
+            What leaves the browser
+          </button>
+          <button id="eval-stop" type="button" class="hidden text-sm font-medium text-red-700 dark:text-red-300 underline">Stop</button>
+          <span id="eval-status" class="text-xs text-surface-500 dark:text-surface-400"></span>
+        </div>
+        <div id="eval-working" class="hidden mb-3 [&:not(.hidden)]:flex items-center gap-3 p-3 rounded-lg border border-accent-300 dark:border-accent-700 bg-white dark:bg-surface-900 text-sm">
+          <span class="inline-block w-4 h-4 rounded-full border-2 border-accent-600 border-t-transparent animate-spin" aria-hidden="true"></span>
+          <span class="phase font-medium text-surface-800 dark:text-surface-200">Working…</span>
+          <span class="elapsed ml-auto font-mono text-xs text-surface-500 dark:text-surface-400"></span>
+        </div>
+        <pre id="eval-digest" class="hidden text-xs p-3 mb-3 rounded-lg border border-surface-300 dark:border-surface-700 bg-white dark:bg-surface-950 text-surface-800 dark:text-surface-200 max-h-96 overflow-auto whitespace-pre-wrap"></pre>
 
-      <div class="flex flex-wrap items-end gap-3">
-        <label class="block text-sm text-surface-700 dark:text-surface-300 grow">Question or follow-up (optional)
-          <textarea id="eval-question" rows="2" class={box} placeholder="e.g. Is CUSA a defensible single-item construct here? Would a higher-order QUAL help?"></textarea>
-        </label>
-        <button id="eval-send" type="button"
-          class="inline-flex items-center gap-2 font-medium rounded-lg px-4 py-2.5 text-sm bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 disabled:opacity-50">
-          Send
-        </button>
-      </div>
-      <p id="eval-usage" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
+        <div id="eval-transcript" class="report space-y-4 mb-4"></div>
+
+        <div class="flex flex-wrap items-end gap-3">
+          <label class="block text-sm text-surface-700 dark:text-surface-300 grow">Question or follow-up (optional)
+            <textarea id="eval-question" rows="2" class={box} placeholder="e.g. Is CUSA a defensible single-item construct here? Would a higher-order QUAL help?"></textarea>
+          </label>
+          <button id="eval-send" type="button"
+            class="inline-flex items-center gap-2 font-medium rounded-lg px-4 py-2.5 text-sm bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700 disabled:opacity-50">
+            Send
+          </button>
+        </div>
+        <p id="eval-usage" class="text-xs mt-2 text-surface-500 dark:text-surface-400"></p>
+      </section>
+
+      <div id="results-body" class="report"></div>
     </section>
 
     <div class="mt-12 pt-8 border-t border-surface-200 dark:border-surface-800">
@@ -331,8 +328,18 @@ const toggle = "inline-flex items-center gap-2 text-sm font-medium text-surface-
         <li>The bootstrapped congruence-coefficient test (Franke, Sarstedt &amp; Danks, 2021)</li>
         <li>Threshold assessment following <em>PLS-SEM Using R</em>, with every rule and source stated</li>
         <li>Path diagrams as seminr's <code>plot()</code>, a standalone HTML report, all results as JSON, and the R script</li>
-        <li>An optional review by a Gemini model, with your own API key, that sees aggregate results only and tests its suggestions by re-running models here</li>
+        <li>An optional review by a Gemini model (free on this site's key, or with your own) that sees aggregate results only and tests its suggestions by re-running models here</li>
       </ul>
+      <h3 class="text-base font-semibold text-surface-900 dark:text-surface-100 mb-2">How closely it matches R</h3>
+      <p class="text-sm text-surface-600 dark:text-surface-400 leading-relaxed max-w-3xl mb-8">
+        The engine is the open-source TypeScript port of SEMinR and seminrExtras.
+        Point estimates, the summary tables and PLSpredict reproduce R exactly
+        (PLSpredict includes R's fold shuffle for a given seed). The bootstrap uses
+        R's random number generator too, but seminr draws its resamples on a
+        parallel stream, so intervals agree with R to Monte Carlo error, not digit
+        for digit. The congruence test with rho<sub>C</sub> is bit-identical to
+        <code>seminrExtras::congruence_test()</code>.
+      </p>
       <div class="flex flex-wrap gap-3">
         <Button href="https://github.com/sem-in-r/seminr-ts" variant="secondary" external>seminr-ts on GitHub</Button>
         <Button href="https://github.com/sem-in-r/seminrExtras" variant="secondary" external>seminrExtras on GitHub</Button>

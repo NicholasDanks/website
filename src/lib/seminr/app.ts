@@ -8,8 +8,9 @@
 import type { AnalysisResult, AnalysisOptions, StageId, StageStatus } from "./analyze";
 import type { WorkerMessage, WorkerRequest } from "./worker";
 import { parseSeminrModel, requiredItems, type ParsedModel } from "./parseSeminr";
-import { renderSections, renderStandaloneReport, REPORT_CSS, esc, type RenderContext } from "./report";
+import { renderSections, renderStandaloneReport, REPORT_CSS, esc, type RenderContext, type ReportSection } from "./report";
 import { buildDigest, digestLooksSafe, type Digest } from "./digest";
+import { worthALook } from "./assess";
 import { sanitizeSvg } from "./sanitize";
 import type { EvaluatorSession, RunModelInput } from "./evaluator";
 
@@ -284,6 +285,70 @@ function graphviz() {
 }
 
 
+/**
+ * A diagram taller than most of the window is shrunk to fit a fixed-height box
+ * and gets an "Open full size" button: a dialog that shows it at natural size
+ * with zoom, so large models stay legible without a 1,500px scroll.
+ */
+function fitDiagram(el: HTMLElement) {
+  const svg = el.querySelector("svg");
+  el.classList.remove("diagram-tall");
+  if (el.nextElementSibling?.classList.contains("diagram-expand")) el.nextElementSibling.remove();
+  const vb = svg?.viewBox.baseVal;
+  if (!svg || !vb || !vb.width) return;
+  const naturalWidth = vb.width * (4 / 3); // Graphviz units are points
+  // A diagram inside a closed <details> has no width yet; size it as the report body.
+  const boxWidth = el.clientWidth || $("results-body").clientWidth;
+  const shownWidth = Math.min(boxWidth - 32, naturalWidth);
+  const tall = shownWidth * (vb.height / vb.width) > window.innerHeight * 0.7;
+  const shrunk = shownWidth / naturalWidth < 0.6;
+  if (!tall && !shrunk) return;
+  if (tall) el.classList.add("diagram-tall");
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "copy diagram-expand";
+  btn.textContent = "Open full size";
+  btn.addEventListener("click", () => openDiagram(svg, naturalWidth));
+  el.after(btn);
+}
+
+function openDiagram(svg: SVGSVGElement, naturalWidth: number) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "report diagram-dialog";
+  dialog.setAttribute("aria-label", "Path diagram, full size");
+  const bar = document.createElement("div");
+  bar.className = "dd-bar";
+  const body = document.createElement("div");
+  body.className = "dd-body";
+  const copy = svg.cloneNode(true) as SVGSVGElement;
+  copy.removeAttribute("width");
+  copy.removeAttribute("height");
+  copy.style.height = "auto";
+  copy.style.maxWidth = "none";
+  body.appendChild(copy);
+  let zoom = 1;
+  const label = document.createElement("span");
+  label.className = "text-xs";
+  const apply = () => { copy.style.width = `${Math.round(naturalWidth * zoom)}px`; label.textContent = `${Math.round(zoom * 100)}%`; };
+  const button = (text: string, title: string, onClick: () => void, cls = "") => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = text; b.title = title; b.className = cls;
+    b.addEventListener("click", onClick);
+    bar.appendChild(b);
+  };
+  button("−", "Zoom out", () => { zoom = Math.max(0.25, zoom / 1.25); apply(); });
+  button("+", "Zoom in", () => { zoom = Math.min(4, zoom * 1.25); apply(); });
+  button("Fit width", "Fit to the window width", () => { zoom = (body.clientWidth - 16) / naturalWidth; apply(); });
+  bar.appendChild(label);
+  button("Close", "Close (Esc)", () => dialog.close(), "dd-close");
+  dialog.append(bar, body);
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
+  document.body.appendChild(dialog);
+  apply();
+  dialog.showModal();
+}
+
 async function renderDiagrams(result: AnalysisResult, ctx: RenderContext) {
   try {
     const gv = await graphviz();
@@ -291,7 +356,7 @@ async function renderDiagrams(result: AnalysisResult, ctx: RenderContext) {
     ctx.svg = svg;
     document.querySelectorAll<HTMLElement>("[data-diagram]").forEach((el) => {
       const which = el.dataset.diagram as "model" | "boot";
-      if (svg[which]) el.innerHTML = svg[which]!;
+      if (svg[which]) { el.innerHTML = svg[which]!; fitDiagram(el); }
     });
     $("download-svg").classList.remove("hidden");
   } catch (err) {
@@ -317,13 +382,18 @@ function renderResults(result: AnalysisResult) {
     style.textContent = REPORT_CSS;
     document.head.appendChild(style);
   }
-  $("results-nav").innerHTML = sections.map((s) => `<a href="#${s.id}" class="px-2 py-1 rounded-md text-xs font-medium text-surface-600 dark:text-surface-400 hover:text-accent-600 dark:hover:text-accent-400 hover:bg-surface-100 dark:hover:bg-surface-800/60">${esc(s.title)}</a>`).join("");
-  $("results-body").innerHTML = sections.map((s) => `<section id="${s.id}" class="scroll-mt-28"><h2>${esc(s.title)}</h2>${s.html}</section>`).join("");
+  const navLink = "shrink-0 whitespace-nowrap px-2 py-1 rounded-md text-xs font-medium hover:text-accent-600 dark:hover:text-accent-400 hover:bg-surface-100 dark:hover:bg-surface-800/60";
+  // The Gemini review sits between the summary and the detailed sections.
+  const reviewLink = `<a href="#evaluate" class="${navLink} text-accent-700 dark:text-accent-400">Gemini review</a>`;
+  $("results-nav").innerHTML = sections.map((s) => `<a href="#${s.id}" class="${navLink} text-surface-600 dark:text-surface-400">${esc(s.title.replace(/ and reproduction$/, ""))}</a>${s.id === "summary" ? reviewLink : ""}`).join("");
+  const sectionHtml = (s: ReportSection) => `<section id="${s.id}" class="scroll-mt-28"><h2>${esc(s.title)}</h2>${s.html}</section>`;
+  $("results-summary").innerHTML = sections.filter((s) => s.id === "summary").map(sectionHtml).join("");
+  $("results-body").innerHTML = sections.filter((s) => s.id !== "summary").map(sectionHtml).join("");
   $("results").classList.remove("hidden");
   $("evaluate").classList.remove("hidden");
   $("eval-digest").classList.add("hidden");
 
-  $("results-body").querySelectorAll<HTMLButtonElement>("button.copy[data-tsv]").forEach((btn) => {
+  $("results").querySelectorAll<HTMLButtonElement>("button.copy[data-tsv]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const text = ctx.tsv[btn.dataset.tsv!];
       if (!text) return;
@@ -452,7 +522,8 @@ function setWorking(phase: string | null) {
 function compareRuns(base: AnalysisResult, alt: AnalysisResult): string {
   const gates = (r: AnalysisResult) => r.assessment.filter((a) => a.kind === "gate");
   const g0 = gates(base), g1 = gates(alt);
-  const count = (xs: typeof g0, st: string) => xs.filter((a) => a.status === st).length;
+  const count = (xs: typeof g0, st: string) => xs.filter((a) => a.status === st && !worthALook(a)).length;
+  const look = (xs: typeof g0) => xs.filter(worthALook).length;
   const sig = (r: AnalysisResult) => {
     const b = r.bootstrap && !("error" in r.bootstrap) ? r.bootstrap.bootstrappedPaths : null;
     if (!b) return null;
@@ -469,7 +540,7 @@ function compareRuns(base: AnalysisResult, alt: AnalysisResult): string {
   const removed = base.model.paths.filter((p) => !alt.model.paths.some((q) => q.from === p.from && q.to === p.to));
   const f = (x: number) => (Number.isFinite(x) ? x.toFixed(3) : "n/a");
   const lines = [
-    `Quality gates: ${count(g1, "fail")} problems, ${count(g1, "warn")} to check (was ${count(g0, "fail")} / ${count(g0, "warn")}).`,
+    `Quality gates: ${count(g1, "fail")} problems, ${count(g1, "warn")} to check, ${look(g1)} worth a look (was ${count(g0, "fail")} / ${count(g0, "warn")} / ${look(g0)}).`,
     s1 && s0 ? `Paths supported: ${s1.supported} of ${s1.total} (was ${s0.supported} of ${s0.total}).` : s1 ? `Paths supported: ${s1.supported} of ${s1.total}.` : "No bootstrap in this run.",
     `R² of ${key}: ${f(r2(alt))} (was ${f(r2(base))}).`,
     added.length ? `Added paths: ${added.map((p) => `${p.from} → ${p.to}`).join(", ")}.` : "",
