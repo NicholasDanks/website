@@ -1,8 +1,27 @@
 # Resume point — nicholasdanks.com
 
-**State (2026-09-14, end of day):** Everything is live on nicholasdanks.com. The review page uses Nick's own free-tier Gemini key from the Netlify env var `PUBLIC_GEMINI_API_KEY` (site-key mode confirmed in the live bundle); Google's service-account-bound keys cannot be referrer-restricted, so the key is extractable by design and the project must stay billing-free. Next step is Nick's: UX pass on the live page; decide whether epistemic rho should also leave the page's own report.
+**State (2026-09-17, end of day):** The UX pass on `/seminr/` is LIVE (commit 4fb5e8d, deployed ~30 s after the push; a corporate reputation demo run on the live site succeeded with 0 console/CSP errors). Nothing blocked. Next steps are Nick's: (1) rotate the Gemini and Anthropic keys that appeared in chat on 14 Sep; (2) decide whether epistemic rho should stay in the page's own report; (3) optional polish, listed below.
 
-## What changed today
+## What changed on 17 Sep (UX pass)
+
+- **Two-tier quality gates** (`assess.ts`: `advisory`, `needsAction`, `worthALook`; `tallyGates` counts advisory checks separately). "Worth a look — no action required" = a non-significant formative weight with loading ≥ 0.50, an HTMT upper bound 0.80–0.85, or a VIF 3–5; shown in blue, collapsed. The status stays `warn`, so the Gemini digest is byte-for-byte unchanged and the 14 Sep prompt scores still apply.
+- **Summary** (`report.ts`) now covers structural VIF and congruence gates, so it agrees with "All N quality gates"; progress says "134 quality gates, 49 findings".
+- **Gemini review moved under the Summary**: `#results-summary` container in `index.astro`, then `#evaluate`, then `#results-body`; "Gemini review" is second in the sticky nav. The run-comparison line uses the three tiers.
+- HTMT matrix greys pairs it does not assess (they used to show red). CVPAT tables rebuilt; numeric headers right-aligned; Copy TSV buttons labelled; fixed "p = < 0.001", the uppercased α, "; …." and single-value Q² ranges.
+- Diagrams taller than 70% of the window, or shown below 60% of natural size, get a fixed box plus an "Open full size" zoom dialog (`fitDiagram`/`openDiagram` in `app.ts`).
+- Phones: gate rows stack as cards; the sticky nav scrolls in one line (113 → 65 px).
+- Page (`index.astro`): demo strip above the inputs; privacy panel slimmed to one statement plus a disclosure that names both possible requests (demo data, Gemini review); R-agreement paragraph moved to "What is computed"; Cancel no longer visible when idle (`inline-flex` beat `hidden` → `[&:not(.hidden)]:inline-flex`); stale "your own API key" / "Load demo" copy fixed.
+- Tested: `npm run check`, `npm test`, `npm run build`, `test/headless-evaluator.mjs` against the mock (0 CSP violations), and headless-Chrome screenshots at 1440/390 px in light and dark.
+
+## Still open / optional polish
+
+- Not tested: a live Gemini review, keyboard navigation, the downloaded standalone HTML report after these changes.
+- Summary lists repeat the criterion ("Outer weight qual_2 → QUAL; Outer weight qual_3 → QUAL …"); could be grouped.
+- Dark mode: the path diagram stays a white panel (left deliberately).
+
+## Earlier (14 Sep)
+
+### What changed on 14 Sep
 
 - **Review assistant moved from Anthropic to Gemini** (`src/lib/seminr/evaluator.ts` rewritten): browser calls `generativelanguage.googleapis.com` directly over REST with SSE streaming and function calling, no SDK bundled (`@anthropic-ai/sdk` is now a dev dependency only). Model dropdown on the page: gemini-3.8-flash (default), gemini-3.6-flash, gemini-pro-latest. Page copy discloses that a free-tier key lets Google use the aggregate digest to improve products. CSP `connect-src` in `netlify.toml` now names the Gemini host. Old Anthropic storage keys are cleared on load.
 - **Epistemic rho removed from the review** (unpublished): stripped from the digest and its gate lines, gone from the prompt. Still shown on the page's own report.
