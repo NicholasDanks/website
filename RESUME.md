@@ -43,3 +43,13 @@
 ## How to work here
 
 `npm run dev` · `npm run check` · `npm test` (R-parity suite) · `npm run build`. Prompt or digest changes: run `set -a; source .env; set +a; npx tsx test/model-compare.mjs --repeat 2` and `--demo moderation`, compare `summary.md` rubric columns before shipping. Any new external endpoint must be added to the CSP in `netlify.toml`.
+
+## 2026-09-23 — Gemini key moved behind a relay (PR #1, merged 98e16d0)
+
+The site key is no longer in the page. `netlify/functions/gemini.mts` relays `/api/gemini/<model>`
+with `GEMINI_SITE_KEY` (Netlify, server-side only); a visitor's own key still goes browser → Google.
+Tests: `npx tsx test/gemini-relay.mjs` (16 checks); `test/relay-server.mjs` serves dist/ with the
+relay for the headless review (`node test/mock-gemini.mjs &` first). Deploy previews work (same-origin
+rule). Local `.env` now holds only `GEMINI_API_KEY` (LOCAL key); `PUBLIC_GEMINI_API_KEY` is gone
+everywhere. Unverified: whether Netlify's function rate limit is active on this plan; Gemini Pro
+turns against the 60 s function limit.
