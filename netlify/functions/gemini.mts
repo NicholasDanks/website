@@ -7,7 +7,7 @@
  * bypass this and call Google directly from the browser.
  *
  * What it guards against: extraction of the key from the page (the key is no
- * longer in any bundle), use of the relay from other websites (Origin check),
+ * longer in any bundle), use of the relay from other websites (same-origin check),
  * arbitrary models (allowlist), oversized requests, and bursts (Netlify rate
  * limit per IP). What it cannot stop: a determined script that forges the
  * Origin header and stays under the rate limit. The free tier's own quota, on a
@@ -22,18 +22,20 @@ const MAX_BODY_BYTES = 2_000_000;
 
 const env = (name: string): string => (process.env[name] ?? "").trim();
 
-function allowedOrigins(): Set<string> {
-  const set = new Set(["https://nicholasdanks.com", "https://www.nicholasdanks.com"]);
-  // Netlify's own URLs for this site and this deploy (covers deploy previews).
-  for (const name of ["URL", "DEPLOY_URL", "DEPLOY_PRIME_URL"]) {
-    const v = env(name);
-    if (v) { try { set.add(new URL(v).origin); } catch { /* ignore */ } }
-  }
-  return set;
-}
+const SITE_ORIGINS = new Set(["https://nicholasdanks.com", "https://www.nicholasdanks.com"]);
 
-function originOk(origin: string): boolean {
-  if (allowedOrigins().has(origin)) return true;
+/**
+ * Same-origin rule: the page calling the relay must be served from the host the
+ * relay runs on (production, or this site's own deploy previews). Netlify does
+ * not expose URL / DEPLOY_PRIME_URL to functions at runtime, so the request's own
+ * origin is the reference.
+ */
+function originOk(origin: string, requestUrl: string): boolean {
+  if (!origin) return false;
+  if (SITE_ORIGINS.has(origin)) return true;
+  let self = "";
+  try { self = new URL(requestUrl).origin; } catch { /* ignore */ }
+  if (origin === self && (self.endsWith(".netlify.app") || SITE_ORIGINS.has(self))) return true;
   // Local `netlify dev` only.
   return env("NETLIFY_DEV") === "true" && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
 }
@@ -52,7 +54,7 @@ export default async (req: Request, context: { params?: Record<string, string> }
   const key = env("GEMINI_SITE_KEY");
   if (!key) return fail(503, "UNAVAILABLE", "The site's shared review is not configured. Paste your own Gemini key instead.");
 
-  if (!originOk(req.headers.get("origin") ?? "")) return fail(403, "PERMISSION_DENIED", "This relay only serves nicholasdanks.com.");
+  if (!originOk(req.headers.get("origin") ?? "", req.url)) return fail(403, "PERMISSION_DENIED", "This relay only serves nicholasdanks.com.");
 
   const model = context.params?.model ?? new URL(req.url).pathname.split("/").pop() ?? "";
   if (!MODELS.has(model)) return fail(400, "INVALID_ARGUMENT", "Unknown model.");

@@ -20,16 +20,14 @@ const upstream = http.createServer((req, res) => {
 });
 await new Promise((r) => upstream.listen(0, r));
 process.env.GEMINI_UPSTREAM = `http://127.0.0.1:${upstream.address().port}`;
-process.env.URL = "https://nicholasdanks.com";
-process.env.DEPLOY_PRIME_URL = "https://deploy-preview-7--example-site.netlify.app";
 delete process.env.NETLIFY_DEV;
 
 const { default: relay, config } = await import("../netlify/functions/gemini.mts");
 const { EVALUATOR_MODELS } = await import("../src/lib/seminr/evaluator.ts");
 const good = EVALUATOR_MODELS[0].id;
 const body = JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hi" }] }] });
-const call = (model, { origin = "https://nicholasdanks.com", b = body, method = "POST" } = {}) =>
-  relay(new Request(`https://nicholasdanks.com/api/gemini/${model}`, { method, headers: { Origin: origin, "Content-Type": "application/json" }, body: method === "POST" ? b : undefined }), { params: { model } });
+const call = (model, { origin = "https://nicholasdanks.com", b = body, method = "POST", host = "https://nicholasdanks.com" } = {}) =>
+  relay(new Request(`${host}/api/gemini/${model}`, { method, headers: { Origin: origin, "Content-Type": "application/json" }, body: method === "POST" ? b : undefined }), { params: { model } });
 
 let pass = 0; const ok = (name, fn) => fn().then(() => { pass++; console.log("ok  ", name); });
 
@@ -46,7 +44,9 @@ await ok("GET -> 405", async () => assert.equal((await call(good, { method: "GET
 await ok("foreign origin -> 403", async () => assert.equal((await call(good, { origin: "https://evil.example" })).status, 403));
 await ok("missing origin -> 403", async () => assert.equal((await call(good, { origin: "" })).status, 403));
 await ok("localhost refused outside netlify dev", async () => assert.equal((await call(good, { origin: "http://localhost:8888" })).status, 403));
-await ok("deploy-preview origin of this site allowed", async () => assert.equal((await call(good, { origin: "https://deploy-preview-7--example-site.netlify.app" })).status, 200));
+await ok("deploy preview calling its own relay allowed", async () => assert.equal((await call(good, { origin: "https://deploy-preview-7--example-site.netlify.app", host: "https://deploy-preview-7--example-site.netlify.app" })).status, 200));
+await ok("other netlify.app site calling our relay refused", async () => assert.equal((await call(good, { origin: "https://evil--other.netlify.app" })).status, 403));
+await ok("other netlify.app site calling a preview relay refused", async () => assert.equal((await call(good, { origin: "https://evil--other.netlify.app", host: "https://deploy-preview-7--example-site.netlify.app" })).status, 403));
 await ok("unknown model -> 400, never forwarded", async () => { seen = null; assert.equal((await call("gemini-ultra-9")).status, 400); assert.equal(seen, null); });
 await ok("path traversal in model -> 400", async () => assert.equal((await call("..%2F..%2Fx")).status, 400));
 await ok("non-JSON -> 400", async () => assert.equal((await call(good, { b: "nope" })).status, 400));
