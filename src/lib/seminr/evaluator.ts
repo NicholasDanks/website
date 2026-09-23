@@ -5,15 +5,20 @@
  * runs the SEMinR code locally on the user's data and returns a digest — the
  * assistant never receives an observation.
  *
- * Transport: the user's own Gemini API key (Google AI Studio), sent by the
- * browser straight to generativelanguage.googleapis.com over the REST API
- * (streamGenerateContent with function calling). No server sits in between
- * and no SDK is bundled.
+ * Transport: the Gemini REST API (streamGenerateContent with function
+ * calling); no SDK is bundled. Two routes:
+ *  - the site's shared review: POST to the same-origin relay at /api/gemini/<model>
+ *    (netlify/functions/gemini.mts), which adds the site's key server-side; the
+ *    key never reaches the browser;
+ *  - a visitor's own Gemini API key: sent by the browser straight to
+ *    generativelanguage.googleapis.com, with no server in between.
  */
 
 import type { Digest } from "./digest";
 
 export const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com";
+/** Same-origin relay that holds the site's key (netlify/functions/gemini.mts). */
+export const SITE_RELAY = "/api/gemini";
 
 export interface EvaluatorModel {
   id: string;
@@ -257,7 +262,12 @@ export async function runTurn(
 ): Promise<void> {
   session.contents.push({ role: "user", parts: [{ text: userContent }] });
   const model = evaluatorModel(modelId);
-  const url = `${baseURL.replace(/\/$/, "")}/v1beta/models/${model.id}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+  // A visitor's own key (or the test harness's mock endpoint) goes straight to Google;
+  // otherwise the request goes through the site's relay, which holds the key.
+  const direct = apiKey !== "" || baseURL !== GEMINI_ENDPOINT;
+  const url = direct
+    ? `${baseURL.replace(/\/$/, "")}/v1beta/models/${model.id}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`
+    : `${SITE_RELAY}/${model.id}`;
 
   let toolRuns = 0;
   const MAX_TOOL_RUNS = 8;

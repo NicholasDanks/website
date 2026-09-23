@@ -487,8 +487,8 @@ function analyzeInWorker(req: WorkerRequest, onProgress?: (text: string) => void
 // ---------------------------------------------------------------------------
 
 const KEY_STORAGE = "seminr-gemini-key";
-/** The site's own free-tier key, injected at build time from PUBLIC_GEMINI_API_KEY (Netlify env var); empty when unset. */
-const SITE_KEY = ((import.meta.env.PUBLIC_GEMINI_API_KEY as string | undefined) ?? "").trim();
+/** The site's shared review runs through the same-origin relay (/api/gemini), which holds the key server-side (Netlify env GEMINI_SITE_KEY). No key is ever in the page. */
+const SITE_REVIEW = true;
 const MODEL_STORAGE = "seminr-gemini-model";
 /** Storage keys from the retired Anthropic transport, cleared on load. */
 const RETIRED_STORAGE = ["seminr-anthropic-key", "seminr-anthropic-model", "seminr-anthropic-base-url"];
@@ -671,8 +671,8 @@ async function runModelForAssistant(input: RunModelInput, card: HTMLElement): Pr
 
 async function evaluatorTurn(userText: string, opening: boolean) {
   const ownKey = $<HTMLInputElement>("api-key").value.trim();
-  const key = ownKey || SITE_KEY;
-  if (!key) { evalStatus("Enter your Gemini API key first."); return; }
+  const key = ownKey;
+  if (!key && !SITE_REVIEW) { evalStatus("Enter your Gemini API key first."); return; }
   if (!lastResult) { evalStatus("Run an analysis first."); return; }
   if (evalBusy) return;
   if (ownKey) saveKey(ownKey, $<HTMLInputElement>("remember-key").checked);
@@ -755,7 +755,7 @@ function mountEvaluator() {
   try { for (const k of RETIRED_STORAGE) { localStorage.removeItem(k); sessionStorage.removeItem(k); } } catch { /* ignore */ }
   const key = loadKey();
   if (key) { $<HTMLInputElement>("api-key").value = key; $<HTMLInputElement>("remember-key").checked = !!localStorage.getItem(KEY_STORAGE); }
-  if (SITE_KEY) $("key-mode").classList.remove("hidden");
+  if (SITE_REVIEW) $("key-mode").classList.remove("hidden");
   else $<HTMLDetailsElement>("own-key").open = true;
   if (key) $<HTMLDetailsElement>("own-key").open = true;
   try {
